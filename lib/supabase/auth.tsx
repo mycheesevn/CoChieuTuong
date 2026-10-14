@@ -23,6 +23,9 @@ export interface Profile {
   username: string | null;
   full_name: string | null;
   avatar_url: string | null;
+  birth_date: string | null;
+  city: string | null;
+  country: string | null;
 }
 
 export interface CctStats {
@@ -44,6 +47,7 @@ interface AuthCtx {
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshStats: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   displayName: string;
 }
 
@@ -95,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const supabase = createClient();
       const { data } = await supabase
         .from("profiles")
-        .select("id, username, full_name, avatar_url")
+        .select("id, username, full_name, avatar_url, birth_date, city, country")
         .eq("id", uid)
         .single();
       if (data) setProfile(data as Profile);
@@ -187,6 +191,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, loadProfile]);
 
+  // loadProfile refreshes both the profile row and the stats.
+  const refreshProfile = refreshStats;
+
   const name = useMemo(() => displayName(profile, user?.email), [profile, user]);
 
   const value = useMemo(
@@ -201,6 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signUp,
       signOut,
       refreshStats,
+      refreshProfile,
       displayName: name,
     }),
     [

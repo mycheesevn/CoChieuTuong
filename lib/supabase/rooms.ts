@@ -119,7 +119,7 @@ export interface MyRoomMatch {
   mySide: "r" | "g";
 }
 
-export const REACTIONS = ["👏", "🔥", "😮", "👍", "🎉"];
+export const REACTIONS = ["👏", "🔥", "😱", "👍", "😮"];
 
 /** Map an RPC error to a stable key the UI translates. */
 export function roomErrorKey(err: unknown): string {
@@ -656,6 +656,33 @@ export async function unreact(matchId: string, emoji: string): Promise<void> {
     .eq("user_id", user.id)
     .eq("emoji", emoji);
   if (error) throw error;
+}
+
+/** Realtime reaction INSERTs for one match — drives the emoji floaters
+ *  over the board (PacClone pattern). Members receive events under the
+ *  reactions RLS policy; guests need the anon-select policy (migration
+ *  004) for public rooms. */
+export function subscribeReactions(
+  matchId: string,
+  onEmoji: (emoji: string, id?: string) => void
+): RealtimeChannel {
+  const supabase = createClient();
+  const ch = supabase
+    .channel(`cct-reactions:${matchId}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "INSERT",
+        schema: "public",
+        table: "cct_match_reactions",
+        filter: `match_id=eq.${matchId}`,
+      },
+      (payload: { new: { emoji?: string; id?: string } }) => {
+        if (payload.new?.emoji) onEmoji(payload.new.emoji, payload.new?.id);
+      }
+    );
+  ch.subscribe();
+  return ch;
 }
 
 /* ---------------------------- realtime ---------------------------- */
