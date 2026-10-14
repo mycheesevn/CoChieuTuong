@@ -226,8 +226,8 @@ export default function Board(props: BoardProps) {
           if (cell === 0) return null;
           const [x, y] = P(sq);
           const isGen = cell === R_GENERAL || cell === G_GENERAL;
-          const r = isGen ? 68 : 52;
-          const ring = isGen ? 55 : 41;
+          const r = isGen ? 68 : 44;
+          const ring = isGen ? 55 : 34;
           const grad =
             cell === R_GENERAL || cell === R_SOLDIER ? "cctRedDisc" : "cctGreenDisc";
           const ringOp = cell === R_GENERAL || cell === R_SOLDIER ? 0.3 : 0.35;
