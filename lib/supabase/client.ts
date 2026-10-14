@@ -15,3 +15,12 @@ export function createClient() {
   cached = createBrowserClient(url, key);
   return cached;
 }
+
+/** Nullable variant: null when env is missing (solo play unaffected). */
+export function getSupabase() {
+  try {
+    return createClient();
+  } catch {
+    return null;
+  }
+}

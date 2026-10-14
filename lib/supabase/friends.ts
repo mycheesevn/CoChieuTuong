@@ -153,6 +153,7 @@ export async function sendChallenge(
     to: challengedId,
     room: room.code,
     from: myName,
+    challenge: (data as { id: string }).id,
   });
   return data as Challenge;
 }
@@ -259,6 +260,7 @@ export function subscribeChallenges(
           void fireEvent("challenge_declined", {
             to: c.challenger_id,
             by: names[c.challenged_id] ?? "Player",
+            challenge: c.id,
           });
         }
       }

@@ -155,3 +155,34 @@ export function playLose(): void {
     tone({ freq: f, dur: 0.22, gain: 0.18, type: "triangle", delay: i * 0.14 })
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Scheduled synth variants for video export. `at` is an absolute     */
+/* time on the destination's context (defaults to now). Same voices   */
+/* as the in-game sounds, scheduled on the export timeline.           */
+/* ------------------------------------------------------------------ */
+
+/** Wooden knock when a piece lands. */
+export function synthMove(dest: AudioNode, at?: number): void {
+  toneTo(dest, { freq: 210, freqEnd: 95, dur: 0.09, gain: 0.5, at });
+  noiseTo(dest, { dur: 0.03, gain: 0.12, freq: 2500, type: "highpass", at });
+}
+
+/** Soft whoosh when a piece starts gliding. */
+export function synthMoveStart(dest: AudioNode, at?: number): void {
+  noiseTo(dest, { dur: 0.14, gain: 0.07, freq: 1400, type: "bandpass", q: 1.1, at });
+  toneTo(dest, { freq: 280, freqEnd: 430, dur: 0.11, gain: 0.05, type: "sine", at });
+}
+
+/** Dramatic clash when a piece is captured. */
+export function synthCapture(dest: AudioNode, at?: number): void {
+  toneTo(dest, { freq: 130, freqEnd: 40, dur: 0.28, gain: 0.7, at });
+  noiseTo(dest, { dur: 0.32, gain: 0.4, freq: 900, q: 0.8, at });
+  toneTo(dest, { freq: 320, freqEnd: 120, dur: 0.12, gain: 0.25, delay: 0.02, at });
+}
+
+/** Bright double chime for check. */
+export function synthCheck(dest: AudioNode, at?: number): void {
+  toneTo(dest, { freq: 740, dur: 0.12, gain: 0.18, type: "triangle", at });
+  toneTo(dest, { freq: 988, dur: 0.16, gain: 0.18, type: "triangle", delay: 0.1, at });
+}

@@ -898,6 +898,38 @@ body {
   font-size: 0.85rem;
 }
 
+/* ---------- replay video export ---------- */
+.cct-modal-actions {
+  display: flex; gap: 10px; justify-content: center; margin-top: 12px;
+  flex-wrap: wrap;
+}
+.cct-seg {
+  display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+}
+.cct-seg button {
+  flex: 1; padding: 8px 10px; border: 0; background: var(--panel-2);
+  color: var(--ink); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.cct-seg button.active { background: var(--accent); color: #221a08; }
+.cct-progress {
+  height: 10px; border-radius: 999px; background: var(--panel-2);
+  border: 1px solid var(--border); overflow: hidden; margin: 10px 0 4px;
+}
+.cct-progress-fill {
+  height: 100%; background: var(--accent); transition: width 0.2s linear;
+}
+.cct-video-row { display: flex; align-items: center; gap: 12px; margin: 12px 0; }
+.cct-video-label { font-size: 0.85rem; font-weight: 600; }
+.cct-video-row .cct-seg { flex: 1; }
+.cct-video-mic {
+  display: flex; align-items: center; gap: 8px; font-size: 0.9rem;
+  margin: 10px 0; cursor: pointer;
+}
+.cct-video-preview {
+  width: 100%; max-height: 46vh; border-radius: 10px;
+  background: #000; margin: 8px 0 4px;
+}
+
 /* ---------- check-in calendar ---------- */
 .cct-cal {
   display: flex;
@@ -1468,4 +1500,175 @@ body {
 }
 .cct-view .cct-layout .cct-panel {
   width: 100%;
+}
+
+/* Phase 2C: push nudge + lesson/puzzle/community views */
+.cct-push-nudge {
+  position: fixed;
+  z-index: 70;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: #1d1712;
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  padding: 14px 16px;
+  width: min(420px, calc(100vw - 32px));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+.cct-push-nudge-title {
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.cct-push-nudge-text {
+  font-size: 0.9rem;
+  opacity: 0.85;
+  margin-bottom: 10px;
+}
+.cct-push-nudge-row {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.cct-lib-home,
+.cct-lib-chapter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cct-lib-card {
+  width: 100%;
+  text-align: left;
+  background: #1d1712;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+}
+.cct-lib-card:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.cct-lib-card .cct-lib-cicon {
+  font-size: 1.6rem;
+  margin-right: 10px;
+}
+.cct-lib-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cct-lib-progress {
+  font-size: 0.85rem;
+  opacity: 0.75;
+}
+.cct-lib-quiz-prompt {
+  background: #1d1712;
+  border: 1px dashed var(--accent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-weight: 600;
+}
+.cct-lib-feedback {
+  min-height: 1.4em;
+  font-weight: 600;
+}
+.cct-lib-feedback.bad {
+  color: #ff8787;
+}
+.cct-lib-feedback.good {
+  color: #69db7c;
+}
+.cct-puzzle-streak {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cct-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.cct-tabs button {
+  background: #1d1712;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 6px 12px;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.9rem;
+}
+.cct-tabs button[data-active="true"] {
+  background: var(--accent);
+  color: #14100c;
+  font-weight: 700;
+}
+.cct-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.cct-form-field input,
+.cct-form-field select,
+.cct-form-field textarea {
+  font-size: 16px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--accent);
+  background: #1d1712;
+  color: inherit;
+  font: inherit;
+}
+
+/* Phase 2C Part 5: replay viewer */
+.cct-replay-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0 6px;
+  flex-wrap: wrap;
+}
+.cct-replay-count {
+  font-weight: 700;
+  min-width: 64px;
+  text-align: center;
+}
+.cct-replay-slider {
+  width: 100%;
+  margin: 4px 0 10px;
+  accent-color: var(--accent);
+}
+.cct-replay-moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.cct-replay-moves li {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #1d1712;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.cct-replay-moves li.active {
+  background: var(--accent);
+  color: #14100c;
+  font-weight: 700;
+}
+.cct-replay-ply-num {
+  opacity: 0.6;
+  font-size: 0.8rem;
 }
