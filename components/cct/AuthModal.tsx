@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/supabase/auth";
 import { STR, type Lang } from "@/lib/cct/i18n";
 
@@ -8,6 +8,8 @@ interface Props {
   lang: Lang;
   open: boolean;
   onClose: () => void;
+  /** Which tab the modal opens on (the modal stays internally switchable). */
+  initialMode?: "in" | "up";
 }
 
 function GoogleIcon() {
@@ -44,7 +46,7 @@ function FacebookIcon() {
   );
 }
 
-export function AuthModal({ lang, open, onClose }: Props) {
+export function AuthModal({ lang, open, onClose, initialMode = "in" }: Props) {
   const dict = STR[lang] as Record<string, string | string[]>;
   /** i18n lookup with a hardcoded fallback so the modal works even before
    *  the parent adds these keys to i18n.ts. */
@@ -59,6 +61,15 @@ export function AuthModal({ lang, open, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+
+  // Opening the modal honours the requested initial tab.
+  useEffect(() => {
+    if (open) {
+      setMode(initialMode);
+      setError(null);
+      setDone(null);
+    }
+  }, [open, initialMode]);
 
   if (!open) return null;
 

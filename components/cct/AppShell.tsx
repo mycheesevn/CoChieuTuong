@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import PlayView, { type ViewActions } from "./PlayView";
-import TwoPlayerView from "./TwoPlayerView";
 import HowToView from "./HowToView";
 import { HistoryView } from "./HistoryView";
 import { LeaderboardView } from "./LeaderboardView";
@@ -21,6 +20,7 @@ import { ProfileModal } from "./ProfileModal";
 import { AuthProvider, useAuth } from "@/lib/supabase/auth";
 import { isMuted, setMuted } from "@/lib/cct/sound";
 import { STR, loadLang, saveLang, levelName, type Lang } from "@/lib/cct/i18n";
+import { levelProgress } from "@/lib/cct/levels";
 import type { Side } from "@/lib/cct/engine";
 import {
   fetchPendingChallenges,
@@ -34,7 +34,6 @@ import { createClient } from "@/lib/supabase/client";
 
 type Mode =
   | "play"
-  | "2p"
   | "puzzle"
   | "bikip"
   | "setup"
@@ -49,6 +48,11 @@ type Mode =
   | "friends";
 
 const BANNER_KEY = "cct-big-check-banner";
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: string }>;
+}
 
 function loadBanner(): boolean {
   try {
@@ -68,7 +72,11 @@ function Shell() {
   const [mode, setMode] = useState<Mode>("play");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"in" | "up">("in");
+  const [installEvt, setInstallEvt] =
+    useState<BeforeInstallPromptEvent | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [lang, setLang] = useState<Lang>("vi");
   const [level, setLevel] = useState(5);
@@ -91,7 +99,7 @@ function Shell() {
   const [actionsVersion, setActionsVersion] = useState(0);
   const notifyActions = () => setActionsVersion((x) => x + 1);
 
-  const { user, displayName, signOut } = useAuth();
+  const { user, displayName, signOut, cctStats } = useAuth();
   const userId = user?.id ?? null;
 
   useEffect(() => {
@@ -99,6 +107,26 @@ function Shell() {
     setSoundOn(!isMuted());
     setBannerOn(loadBanner());
   }, []);
+
+  // PWA install prompt (drawer section, shown when available).
+  useEffect(() => {
+    const onPrompt = (e: Event) => {
+      e.preventDefault();
+      setInstallEvt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+  }, []);
+  const onInstallClick = () => {
+    if (installEvt) {
+      void installEvt.prompt();
+      setInstallEvt(null);
+    }
+  };
+
+  // XP level for the header chip + avatar ring (family-wide XP curve).
+  const lp = levelProgress(cctStats?.xp ?? 0);
+  const hasStats = !!cctStats;
 
   // Deep links: ?room=CODE, ?corr=<uuid>, ?challenge=<uuid>, parsed on
   // mount AND on window focus (push taps reuse the open tab).
@@ -332,32 +360,6 @@ function Shell() {
   const actions = actionsRef.current;
   void actionsVersion; // re-read actionsRef after views publish their actions
 
-  const settingsBlock = (
-    <div className="cct-account-menu-settings">
-      <div className="cct-lang">
-        <button
-          className={lang === "vi" ? "active" : ""}
-          onClick={() => changeLang("vi")}
-        >
-          VI
-        </button>
-        <button
-          className={lang === "en" ? "active" : ""}
-          onClick={() => changeLang("en")}
-        >
-          EN
-        </button>
-      </div>
-      <button className="cct-btn small" onClick={toggleSound}>
-        {soundOn ? String(s.soundOn) : String(s.soundOff)}
-      </button>
-      <label className="cct-check-toggle">
-        <input type="checkbox" checked={bannerOn} onChange={toggleBanner} />
-        {String(s.bigCheckBanner)}
-      </label>
-    </div>
-  );
-
   return (
     <div className="cct-page">
       <header className="cct-header">
@@ -373,82 +375,85 @@ function Shell() {
             <h1 className="cct-title">{String(s.appName)}</h1>
           </div>
           <div className="cct-account">
-            <button
-              className="cct-btn cct-btn-icon"
-              onClick={toggleSound}
-              aria-label={String(s.sound)}
-              title={String(s.sound)}
-            >
-              {soundOn ? "🔊" : "🔇"}
-            </button>
-            <div className="cct-lang">
-              <button
-                className={lang === "vi" ? "active" : ""}
-                onClick={() => changeLang("vi")}
-              >
-                VI
-              </button>
-              <button
-                className={lang === "en" ? "active" : ""}
-                onClick={() => changeLang("en")}
-              >
-                EN
-              </button>
-            </div>
-            <div className="cct-user">
-              {!user ? (
-                <>
-                  <button
-                    className="cct-btn small"
-                    onClick={() => setAuthOpen(true)}
-                  >
-                    {String(s.login)}
-                  </button>
-                  <button
-                    className="cct-gear-btn"
-                    onClick={() => setMenuOpen((v) => !v)}
-                    aria-label={String(s.settings)}
-                  >
-                    ⚙️
-                  </button>
-                </>
-              ) : (
+            <div className="cct-user" role="group" aria-label="Account">
+              {user && hasStats && (
                 <button
-                  className="cct-avatar-btn"
-                  onClick={() => setMenuOpen((v) => !v)}
-                  aria-label={String(s.profile)}
-                  title={displayName}
-                  style={{ position: "relative" }}
+                  type="button"
+                  className="cct-rating-chip"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setMode("leaderboard");
+                  }}
+                  title={String(s.leaderboard)}
                 >
-                  {(displayName || "?").slice(0, 1).toUpperCase()}
-                  {unreadCount > 0 && (
-                    <span
-                      aria-hidden="true"
-                      style={{
-                        position: "absolute",
-                        top: -2,
-                        right: -2,
-                        width: 12,
-                        height: 12,
-                        borderRadius: "50%",
-                        background: "#fa5252",
-                        border: "2px solid var(--cct-bg, #14100c)",
-                      }}
-                    />
-                  )}
+                  ⭐ Lv {lp.level}
                 </button>
               )}
+              <button
+                type="button"
+                className="cct-avatar-btn"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                title={user ? displayName : String(s.settings)}
+                style={{ position: "relative" }}
+              >
+                {unreadCount > 0 && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      position: "absolute",
+                      top: 2,
+                      right: 2,
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      background: "#fa5252",
+                      border: "2px solid var(--bg, #14100c)",
+                      zIndex: 1,
+                    }}
+                  />
+                )}
+                {user ? (
+                  <>
+                    <span
+                      className="cct-level-ring"
+                      style={{ "--p": lp.prog } as CSSProperties}
+                      title={`Lv ${lp.level} · ${lp.into}/${lp.needed} XP`}
+                    >
+                      <span className="cct-account-avatar">👤</span>
+                    </span>
+                    <span className="cct-account-name">{displayName}</span>
+                    <span aria-hidden="true" className="cct-caret">
+                      ▾
+                    </span>
+                  </>
+                ) : (
+                  <span className="cct-account-avatar">⚙️</span>
+                )}
+              </button>
               {menuOpen && (
                 <>
                   <div
                     className="cct-menu-backdrop"
                     onClick={() => setMenuOpen(false)}
                   />
-                  <div className="cct-account-menu">
+                  <div className="cct-account-menu" role="menu">
+                    {user && (
+                      <div className="cct-account-menu-head">
+                        <span className="cct-account-avatar large">👤</span>
+                        <div className="cct-account-menu-id">
+                          <strong>{displayName}</strong>
+                          <span className="cct-muted">{user.email}</span>
+                        </div>
+                      </div>
+                    )}
                     {user && (
                       <>
                         <button
-                          className="cct-btn"
+                          type="button"
+                          role="menuitem"
+                          className="cct-account-menu-item"
                           onClick={() => {
                             setProfileOpen(true);
                             setMenuOpen(false);
@@ -457,21 +462,13 @@ function Shell() {
                           {String(s.profile)}
                         </button>
                         <button
-                          className="cct-btn"
-                          onClick={() => {
-                            setMode("friends");
-                            setMenuOpen(false);
-                          }}
-                        >
-                          {String(s.friends)}
-                        </button>
-                        <button
-                          className="cct-btn"
+                          type="button"
+                          role="menuitem"
+                          className="cct-account-menu-item"
                           onClick={() => {
                             setMode("notifications");
                             setMenuOpen(false);
                           }}
-                          style={{ position: "relative" }}
                         >
                           {String(s.notifications)}
                           {unreadCount > 0 && (
@@ -491,23 +488,117 @@ function Shell() {
                                 padding: "0 5px",
                               }}
                             >
-                              {unreadCount}
+                              {unreadCount > 99 ? "99+" : unreadCount}
                             </span>
                           )}
                         </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="cct-account-menu-item"
+                          onClick={() => {
+                            setMode("friends");
+                            setMenuOpen(false);
+                          }}
+                        >
+                          {String(s.friends)}
+                        </button>
                       </>
                     )}
-                    {settingsBlock}
-                    {user && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="cct-account-menu-item"
+                      aria-expanded={settingsExpanded}
+                      onClick={() => setSettingsExpanded((v) => !v)}
+                    >
+                      ⚙️ {String(s.settings)}
+                      <span aria-hidden="true" className="cct-caret">
+                        {settingsExpanded ? "▾" : "▸"}
+                      </span>
+                    </button>
+                    {settingsExpanded && (
+                      <div className="cct-account-menu-settings">
+                        <div
+                          className="cct-lang"
+                          role="group"
+                          aria-label="Language / Ngôn ngữ"
+                        >
+                          <button
+                            type="button"
+                            className={lang === "en" ? "active" : ""}
+                            onClick={() => changeLang("en")}
+                          >
+                            EN
+                          </button>
+                          <button
+                            type="button"
+                            className={lang === "vi" ? "active" : ""}
+                            onClick={() => changeLang("vi")}
+                          >
+                            VI
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          className="cct-btn small"
+                          onClick={toggleSound}
+                          aria-label={
+                            soundOn ? String(s.soundOff) : String(s.soundOn)
+                          }
+                        >
+                          {soundOn ? String(s.soundOn) : String(s.soundOff)}
+                        </button>
+                        <label className="cct-check-toggle">
+                          <input
+                            type="checkbox"
+                            checked={bannerOn}
+                            onChange={toggleBanner}
+                          />
+                          <span>{String(s.bigCheckBanner)}</span>
+                        </label>
+                        {user && <PushSettings lang={lang} />}
+                      </div>
+                    )}
+                    {user ? (
                       <button
-                        className="cct-btn"
+                        type="button"
+                        role="menuitem"
+                        className="cct-account-menu-item"
                         onClick={() => {
                           setMenuOpen(false);
                           void signOut();
                         }}
                       >
-                        {String(s.logout)}
+                        🚪 {String(s.logout)}
                       </button>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="cct-account-menu-item"
+                          onClick={() => {
+                            setAuthMode("in");
+                            setAuthOpen(true);
+                            setMenuOpen(false);
+                          }}
+                        >
+                          {String(s.authLogin)}
+                        </button>
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="cct-account-menu-item"
+                          onClick={() => {
+                            setAuthMode("up");
+                            setAuthOpen(true);
+                            setMenuOpen(false);
+                          }}
+                        >
+                          {String(s.authSignup)}
+                        </button>
+                      </>
                     )}
                   </div>
                 </>
@@ -515,7 +606,7 @@ function Shell() {
             </div>
           </div>
         </div>
-        {(mode === "play" || mode === "2p") && (
+        {mode === "play" && (
           <div className="cct-quick">
             <button
               className="cct-btn"
@@ -558,12 +649,6 @@ function Shell() {
                     onClick={() => switchMode("play")}
                   >
                     {String(s.play)}
-                  </button>
-                  <button
-                    data-active={mode === "2p"}
-                    onClick={() => switchMode("2p")}
-                  >
-                    {String(s.twoPlayer)}
                   </button>
                   <button
                     data-active={mode === "puzzle"}
@@ -627,6 +712,19 @@ function Shell() {
                   </button>
                 </div>
               </section>
+              {installEvt && (
+                <section>
+                  <div className="cct-drawer-modes">
+                    <button
+                      type="button"
+                      className="cct-btn cct-btn-primary"
+                      onClick={onInstallClick}
+                    >
+                      {String(s.installApp)}
+                    </button>
+                  </div>
+                </section>
+              )}
               {mode === "play" && (
                 <section>
                   <h2>{String(s.playSettings)}</h2>
@@ -646,9 +744,19 @@ function Shell() {
                   </label>
                 </section>
               )}
-              <section>
-                <PushSettings lang={lang} />
-              </section>
+              <div className="cct-drawer-legal">
+                <a href="/terms" target="_blank" rel="noreferrer">
+                  {String(s.termsOfService)}
+                </a>
+                <span>·</span>
+                <a href="/privacy" target="_blank" rel="noreferrer">
+                  {String(s.privacyPolicy)}
+                </a>
+                <span>·</span>
+                <a href="/data-deletion" target="_blank" rel="noreferrer">
+                  {String(s.dataDeletion)}
+                </a>
+              </div>
             </div>
           </nav>
         </div>
@@ -666,14 +774,6 @@ function Shell() {
           customStart={customStart}
           onClearCustom={() => setCustomStart(null)}
           onLoginRequest={() => setAuthOpen(true)}
-        />
-      )}
-      {mode === "2p" && (
-        <TwoPlayerView
-          lang={lang}
-          bannerOn={bannerOn}
-          actionsRef={actionsRef}
-          notifyActions={notifyActions}
         />
       )}
       {mode === "setup" && (
@@ -790,6 +890,7 @@ function Shell() {
       <AuthModal
         lang={lang}
         open={authOpen}
+        initialMode={authMode}
         onClose={() => setAuthOpen(false)}
       />
       <ProfileModal
