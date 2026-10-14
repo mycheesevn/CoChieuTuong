@@ -14,7 +14,7 @@ npm run build && npm start
 ## Kiểm thử engine
 
 ```bash
-npm run test:engine   # 34 assertions: perft, captures, check/mate/stalemate, draw, fuzz
+npm run test:engine   # 38 assertions: perft, captures, check/mate/stalemate, draw, fuzz
 ```
 
 ## Cấu trúc
