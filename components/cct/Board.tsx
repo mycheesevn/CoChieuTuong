@@ -13,11 +13,16 @@ import {
   R_SOLDIER,
 } from "@/lib/cct/engine";
 
-/* Board geometry mirrors ~/workspace/cct-board-mockup.svg (user-approved):
-   viewBox 1080, points at 220 + k*170, wood panel 140..980. */
+/* Board geometry: viewBox 1080, grid points at 100 + k*220 (grid spans
+   100..980 = 81.5% of the board, PacClone-parity), wood panel 50..1030.
+   P0 satisfies every edge-anchored element: threat glow 82 (+5 stroke),
+   selection ring 78 (+2.5), piece shadow 74, hit circles 80. */
 export const VB = 1080;
-const P0 = 220;
-const STEP = 170;
+const P0 = 100;
+const STEP = 220;
+const PANEL = 50; // wood panel starts here; panel is 50..1030
+const PANEL_SIZE = 980;
+const BAND = P0 - PANEL; // frame band holding the coordinate numbers
 
 export function pointXY(i: number, flipped: boolean): [number, number] {
   const x = P0 + colOf(i) * STEP;
@@ -129,40 +134,48 @@ export default function Board(props: BoardProps) {
       </defs>
 
       {/* wood panel */}
-      <rect x={140} y={140} width={840} height={840} rx={16} fill="url(#cctWood)" />
       <rect
-        x={140}
-        y={140}
-        width={840}
-        height={840}
-        rx={16}
+        x={PANEL}
+        y={PANEL}
+        width={PANEL_SIZE}
+        height={PANEL_SIZE}
+        rx={18}
+        fill="url(#cctWood)"
+      />
+      <rect
+        x={PANEL}
+        y={PANEL}
+        width={PANEL_SIZE}
+        height={PANEL_SIZE}
+        rx={18}
         fill="none"
         stroke="#8A5A24"
         strokeWidth={4}
       />
 
-      {/* coordinate labels */}
+      {/* coordinate numbers — small, inside the frame band (Chess-style).
+          P() already mirrors positions when flipped, so the label at a
+          visual position always shows that point's original coordinate. */}
       <g
         fontFamily="DejaVu Sans, sans-serif"
-        fontWeight={700}
-        fontSize={46}
-        fill="#1F3A5F"
+        fontWeight={600}
+        fontSize={30}
+        fill="#5C3D1E"
+        opacity={0.8}
         textAnchor="middle"
         dominantBaseline="central"
       >
         {[0, 1, 2, 3, 4].map((k) => {
-          // P() already mirrors positions when flipped, so the label at a
-          // visual position always shows that point's original coordinate.
           const [x] = P(k);
           const [, y] = P(k * 5);
           const col = k + 1;
           const row = k + 1;
           return (
             <g key={k}>
-              <text x={x} y={86}>
+              <text x={x} y={PANEL + BAND / 2}>
                 {col}
               </text>
-              <text x={66} y={y}>
+              <text x={PANEL + BAND / 2} y={y}>
                 {row}
               </text>
             </g>
@@ -333,7 +346,7 @@ export default function Board(props: BoardProps) {
               key={`h-${i}`}
               cx={x}
               cy={y}
-              r={64}
+              r={80}
               fill="transparent"
               style={{ cursor: interactive ? "pointer" : "default" }}
               onClick={interactive ? () => onPoint(i) : undefined}

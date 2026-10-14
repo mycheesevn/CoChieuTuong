@@ -8,7 +8,7 @@ const SIZE = 1080;
 const HEAD = 230;
 const FOOT = 120;
 const BOARD_SIZE = SIZE - HEAD - FOOT;
-const MARGIN = 90; // within board area
+const MARGIN = 80; // within board area (margin fraction ~ main board)
 const P0 = MARGIN;
 const STEP = (BOARD_SIZE - MARGIN * 2) / 4;
 
