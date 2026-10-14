@@ -769,3 +769,703 @@ body {
     flex-wrap: wrap;
   }
 }
+/* ---------- auth + profile modals ---------- */
+.cct-modal-root {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.cct-modal {
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 16px; padding: 22px 26px; max-width: 420px; width: 100%;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.5);
+  max-height: calc(100dvh - 40px); overflow-y: auto;
+}
+.cct-modal h2 { margin: 0 0 12px; font-size: 1.1rem; text-align: center; }
+.cct-mode-toggle { display: flex; gap: 8px; margin-bottom: 14px; }
+.cct-mode-toggle .cct-btn { flex: 1; }
+.cct-mode-toggle .cct-btn.active {
+  background: var(--accent); border-color: var(--accent);
+  color: #221a08; font-weight: 700;
+}
+.cct-oauth {
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 4px;
+}
+.cct-oauth-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; font-weight: 600;
+}
+.cct-or {
+  display: flex; align-items: center; gap: 10px;
+  color: var(--muted); font-size: 0.8rem; margin: 10px 0;
+}
+.cct-or::before, .cct-or::after {
+  content: ""; flex: 1; height: 1px; background: var(--border);
+}
+.cct-input {
+  background: var(--panel-2); border: 1px solid var(--border); color: var(--ink);
+  border-radius: 8px; padding: 8px 12px; font-size: 14px;
+}
+.cct-input:focus { outline: none; border-color: var(--accent); }
+.cct-error {
+  color: var(--danger); font-size: 0.85rem; margin: 6px 0; text-align: center;
+}
+.cct-ok {
+  color: #69db7c; font-size: 0.85rem; margin: 6px 0; text-align: center;
+}
+.cct-link {
+  background: none; border: none; padding: 0;
+  color: var(--accent); cursor: pointer; font: inherit; text-decoration: underline;
+}
+.cct-buttons { display: flex; gap: 8px; margin-top: 12px; }
+.cct-buttons .cct-btn { flex: 1; }
+.cct-muted { color: var(--muted); }
+
+/* profile modal */
+.cct-profile-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 4px;
+}
+.cct-profile-head h2 { margin: 0; }
+.cct-profile-avatar {
+  width: 84px; height: 84px; border-radius: 50%;
+  background: var(--accent); color: #221a08;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; font-weight: 700; margin: 12px auto 8px;
+}
+.cct-profile-name { font-size: 1.25rem; font-weight: 700; text-align: center; }
+.cct-profile-email {
+  font-size: 0.85rem; color: var(--muted); text-align: center;
+  margin: 2px 0 12px; word-break: break-all;
+}
+.cct-profile-stats { display: flex; gap: 8px; margin: 12px 0; }
+.cct-profile-stat {
+  flex: 1; background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 4px; text-align: center;
+}
+.cct-profile-stat b { display: block; font-size: 1.05rem; }
+.cct-profile-stat span {
+  font-size: 0.68rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+
+/* ---------- legal pages (data-deletion, privacy) ---------- */
+.cct-legal-page { max-width: 720px; margin: 0 auto; padding: 32px 20px 60px; }
+.cct-legal-page h1 { font-size: 1.5rem; margin: 0 0 4px; }
+.cct-legal-page .updated {
+  color: var(--muted); font-size: 0.85rem; margin-bottom: 16px;
+}
+.cct-legal-page h2 { font-size: 1.1rem; margin: 24px 0 8px; }
+.cct-legal-page p { line-height: 1.6; margin: 8px 0; }
+.cct-legal-page .back {
+  display: inline-block; margin-bottom: 20px; color: var(--accent);
+}
+.cct-legal-sep { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+/* ============================================================================
+   Phase 2A views (history, leaderboard, stats, check-in, setup editor) —
+   ported from the Chess/PacClone standard classes, .cct- prefix.
+   ============================================================================ */
+
+.cct-view {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  width: 100%;
+}
+.cct-view h2 {
+  margin: 0 0 16px;
+}
+.cct-streak {
+  font-size: 18px;
+}
+.cct-msg {
+  color: var(--accent-2);
+  font-weight: 600;
+}
+.cct-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+.cct-empty-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.cct-error {
+  color: #e5484d;
+  font-size: 0.85rem;
+}
+
+/* ---------- check-in calendar ---------- */
+.cct-cal {
+  display: flex;
+  gap: 8px;
+  margin: 16px 0;
+  flex-wrap: wrap;
+}
+.cct-cal-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 18px;
+}
+.cct-cal-day small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---------- list views (history rows, leaderboard rows) ---------- */
+.cct-board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cct-lb-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.cct-lb-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 14px 6px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.cct-lb-rank {
+  font-weight: 700;
+  color: var(--accent);
+  min-width: 36px;
+}
+.cct-lb-name {
+  flex: 1;
+}
+.cct-lb-title {
+  color: var(--muted);
+  font-size: 13px;
+}
+.cct-lb-xp {
+  font-weight: 700;
+}
+.cct-lb-me {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* ---------- leaderboard tabs + site statistics ---------- */
+.cct-lb-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.cct-lb-tabs button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+.cct-lb-tabs button.active {
+  border-color: var(--accent);
+  background: var(--panel);
+}
+.cct-stat-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.cct-stat-card {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.cct-stat-card .num {
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+.cct-stat-card .lbl {
+  font-size: 0.82rem;
+  font-weight: 600;
+  margin-top: 2px;
+}
+.cct-stat-card .sub {
+  font-size: 0.75rem;
+  opacity: 0.6;
+  margin-top: 2px;
+}
+.cct-stat-subject {
+  margin-bottom: 8px;
+}
+.cct-chart {
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
+  height: 170px;
+  padding: 10px 2px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+.cct-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.cct-bar-val {
+  font-size: 0.62rem;
+  height: 14px;
+  line-height: 14px;
+}
+.cct-bar {
+  width: 70%;
+  max-width: 30px;
+  min-height: 2px;
+  background: var(--accent);
+  border-radius: 3px 3px 0 0;
+}
+.cct-bar-label {
+  font-size: 0.6rem;
+  opacity: 0.6;
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+/* ---------- pagination ---------- */
+.cct-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+.cct-pagination button {
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.cct-pagination button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---------- board setup editor ---------- */
+.cct-setup-title {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+  color: var(--ink);
+}
+.cct-palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.cct-palbtn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.cct-palbtn svg {
+  width: 36px;
+  height: 36px;
+  display: block;
+}
+.cct-palbtn.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(224, 163, 46, 0.45);
+  background: var(--panel);
+}
+.cct-palbtn-tool {
+  width: auto;
+  min-width: 44px;
+  padding: 6px 10px;
+  gap: 6px;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.cct-setup-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cct-setup-form .cct-select {
+  width: 100%;
+  max-width: none;
+}
+.cct-setup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.cct-setup-error {
+  text-align: left;
+  margin-top: 10px;
+}
+
+/* Phase 2A: identity avatar + game-over extras */
+.cct-avatar-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #14100c;
+  font-weight: 700;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.cct-xp-toast {
+  margin-top: 8px;
+  font-weight: 700;
+  color: var(--accent);
+  font-size: 1.05rem;
+}
+.cct-guest-hint {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border, #3a2f22);
+  border-radius: 10px;
+  font-size: 0.85rem;
+}
+.cct-guest-hint p {
+  margin: 0 0 8px;
+  opacity: 0.85;
+}
+
+/* Phase 2B: rooms / social / correspondence */
+.cct-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+  flex-wrap: wrap;
+}
+.cct-tabs button {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border, #3a2f22);
+  background: var(--panel-2);
+  color: inherit;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cct-tabs button.active {
+  background: var(--accent);
+  color: #14100c;
+  border-color: var(--accent);
+}
+.cct-textarea {
+  width: 100%;
+  max-width: none;
+  min-height: 64px;
+  resize: vertical;
+  font: inherit;
+}
+.cct-code-input {
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  text-align: center;
+  font-weight: 700;
+  max-width: 180px;
+}
+.cct-room-row-btn {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.cct-live-badge {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #ff6b6b;
+  border: 1px solid #ff6b6b;
+  border-radius: 999px;
+  padding: 1px 7px;
+  margin-right: 4px;
+  white-space: nowrap;
+}
+.cct-room-code-card {
+  text-align: center;
+}
+.cct-room-code-big {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: 0.4em;
+  margin: 4px 0 10px;
+  padding-left: 0.4em;
+}
+.cct-vs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cct-vs-side {
+  font-weight: 700;
+  font-size: 0.95rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cct-vs-side.red {
+  text-align: left;
+  color: #e03131;
+}
+.cct-vs-side.green {
+  text-align: right;
+  color: #2b8a5e;
+}
+.cct-vs-mid {
+  font-size: 1.3rem;
+  flex: 0 0 auto;
+}
+.cct-member-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cct-row-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 0 0 auto;
+}
+.cct-comment-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.cct-comment-form .cct-input {
+  flex: 1;
+  min-width: 0;
+}
+.cct-comment-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.cct-comment {
+  background: var(--panel-2);
+  border: 1px solid var(--border, #3a2f22);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.88rem;
+}
+.cct-comment-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 2px;
+  font-size: 0.8rem;
+}
+.cct-reactions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.cct-react {
+  border: 1px solid var(--border, #3a2f22);
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: inherit;
+}
+.cct-react.mine {
+  border-color: var(--accent);
+  background: rgba(224, 163, 46, 0.15);
+}
+.cct-tournament {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border, #3a2f22);
+}
+.cct-tournament-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.cct-standings {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin-bottom: 8px;
+}
+.cct-standings th,
+.cct-standings td {
+  padding: 4px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #3a2f22);
+}
+.cct-standings td:nth-child(2),
+.cct-standings td:nth-child(3),
+.cct-standings th:nth-child(2),
+.cct-standings th:nth-child(3) {
+  text-align: right;
+}
+.cct-pairings {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  font-size: 0.85rem;
+}
+.cct-pairing {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+.cct-invite-card {
+  text-align: center;
+}
+.cct-invite-name {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 6px 0;
+}
+.cct-guest-banner {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(224, 163, 46, 0.12);
+  border: 1px solid var(--accent);
+  font-size: 0.85rem;
+}
+.cct-guest-teaser {
+  text-align: center;
+  margin: 12px 0;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--border, #3a2f22);
+}
+.cct-guest-teaser p {
+  margin: 0 0 10px;
+}
+.cct-modal {
+  position: fixed;
+  z-index: 60;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--panel, #221a12);
+  border: 1px solid var(--border, #3a2f22);
+  border-radius: 16px;
+  padding: 20px;
+  width: min(420px, calc(100vw - 40px));
+  text-align: center;
+}
+.cct-modal h2 {
+  margin: 0 0 10px;
+}
+.cct-modal p {
+  margin: 6px 0;
+}
+.cct-toast {
+  position: fixed;
+  z-index: 70;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  background: #14100c;
+  color: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: calc(100vw - 40px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Phase 2B: match-view layout fixes */
+.cct-backbar {
+  flex: 0 0 auto;
+  align-self: flex-start;
+}
+/* A match view embedded in a scroll view (guest room detail): the
+   height-driven board fit has no definite height to resolve against
+   there, so stack vertically with a width-driven board instead
+   (same pattern as the mobile layout). */
+.cct-view .cct-layout {
+  flex-direction: column;
+}
+.cct-view .cct-layout .cct-board-area {
+  display: block;
+  width: 100%;
+}
+.cct-view .cct-layout .cct-board-fit {
+  width: 100%;
+  height: auto;
+  max-width: 560px;
+  margin: 0 auto;
+}
+.cct-view .cct-layout .cct-panel {
+  width: 100%;
+}

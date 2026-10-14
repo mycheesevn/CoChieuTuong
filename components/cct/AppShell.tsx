@@ -4,10 +4,39 @@ import { useEffect, useRef, useState } from "react";
 import PlayView, { type ViewActions } from "./PlayView";
 import TwoPlayerView from "./TwoPlayerView";
 import HowToView from "./HowToView";
+import { HistoryView } from "./HistoryView";
+import { LeaderboardView } from "./LeaderboardView";
+import { CheckinView } from "./CheckinView";
+import { SetupView } from "./SetupView";
+import RoomView from "./RoomView";
+import CorrView from "./CorrView";
+import FriendsView from "./FriendsView";
+import { AuthModal } from "./AuthModal";
+import { ProfileModal } from "./ProfileModal";
+import { AuthProvider, useAuth } from "@/lib/supabase/auth";
 import { isMuted, setMuted } from "@/lib/cct/sound";
 import { STR, loadLang, saveLang, levelName, type Lang } from "@/lib/cct/i18n";
+import type { Side } from "@/lib/cct/engine";
+import {
+  fetchPendingChallenges,
+  respondChallenge,
+  subscribeChallenges,
+  type Challenge,
+} from "@/lib/supabase/friends";
+import { joinRoom } from "@/lib/supabase/rooms";
+import { createClient } from "@/lib/supabase/client";
 
-type Mode = "play" | "2p" | "howto";
+type Mode =
+  | "play"
+  | "2p"
+  | "setup"
+  | "history"
+  | "leaderboard"
+  | "room"
+  | "corr"
+  | "checkin"
+  | "howto"
+  | "friends";
 
 const BANNER_KEY = "cct-big-check-banner";
 
@@ -19,23 +48,200 @@ function loadBanner(): boolean {
   }
 }
 
-export default function AppShell() {
+export interface CustomStart {
+  pos: string;
+  turn: Side;
+  nonce: number;
+}
+
+function Shell() {
   const [mode, setMode] = useState<Mode>("play");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [lang, setLang] = useState<Lang>("vi");
   const [level, setLevel] = useState(5);
   const [soundOn, setSoundOn] = useState(true);
   const [bannerOn, setBannerOn] = useState(false);
+  const [customStart, setCustomStart] = useState<CustomStart | null>(null);
+  const [openRoomId, setOpenRoomId] = useState<string | null>(null);
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
+  const [corrDeepLinkId, setCorrDeepLinkId] = useState<string | null>(null);
+  const [pendingCorrId, setPendingCorrId] = useState<string | null>(null);
+  const [challenge, setChallenge] = useState<Challenge | null>(null);
+  const [declinedToast, setDeclinedToast] = useState<string | null>(null);
   const actionsRef = useRef<ViewActions | null>(null);
   const [actionsVersion, setActionsVersion] = useState(0);
   const notifyActions = () => setActionsVersion((x) => x + 1);
+
+  const { user, displayName, signOut } = useAuth();
+  const userId = user?.id ?? null;
 
   useEffect(() => {
     setLang(loadLang());
     setSoundOn(!isMuted());
     setBannerOn(loadBanner());
   }, []);
+
+  // Deep links: ?room=CODE and ?corr=<uuid>, parsed on mount AND on
+  // window focus (push taps reuse the open tab).
+  useEffect(() => {
+    const parse = () => {
+      try {
+        const url = new URL(window.location.href);
+        const room = url.searchParams.get("room");
+        const corr = url.searchParams.get("corr");
+        let consumed = false;
+        if (room && /^[A-Za-z0-9]{6}$/.test(room)) {
+          setPendingRoomCode(room.toUpperCase());
+          url.searchParams.delete("room");
+          consumed = true;
+        }
+        if (
+          corr &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            corr
+          )
+        ) {
+          setPendingCorrId(corr);
+          url.searchParams.delete("corr");
+          consumed = true;
+        }
+        if (consumed) {
+          window.history.replaceState(
+            null,
+            "",
+            url.pathname + url.search + url.hash
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    parse();
+    window.addEventListener("focus", parse);
+    return () => window.removeEventListener("focus", parse);
+  }, []);
+
+  // Resolve a pending ?room=CODE once auth state is known.
+  useEffect(() => {
+    if (!pendingRoomCode) return;
+    const code = pendingRoomCode;
+    setPendingRoomCode(null);
+    if (!user) {
+      setInviteCode(code);
+      setMode("room");
+      return;
+    }
+    (async () => {
+      try {
+        const room = await joinRoom(code);
+        setOpenRoomId(room.id);
+        setMode("room");
+      } catch {
+        // Join failed (bad/closed room) — still open the lobby; the
+        // RoomView join form can surface the error.
+        setMode("room");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, pendingRoomCode]);
+
+  // Resolve a pending ?corr=<uuid> for logged-in users.
+  useEffect(() => {
+    if (!pendingCorrId) return;
+    const id = pendingCorrId;
+    setPendingCorrId(null);
+    if (!user) return;
+    setCorrDeepLinkId(id);
+    setMode("corr");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, pendingCorrId]);
+
+  // Challenges: popup on login + live subscription.
+  useEffect(() => {
+    if (!userId) {
+      setChallenge(null);
+      return;
+    }
+    let dead = false;
+    const refresh = async () => {
+      try {
+        const { incoming } = await fetchPendingChallenges();
+        if (!dead && incoming.length > 0) setChallenge(incoming[0]);
+      } catch {
+        /* best-effort */
+      }
+    };
+    void refresh();
+    const ch = subscribeChallenges(
+      userId,
+      (c) => {
+        if (!dead) setChallenge((prev) => prev ?? c);
+      },
+      (challengedName) => {
+        if (dead) return;
+        setDeclinedToast(
+          String(s.challengeDeclinedToast).replace("{name}", challengedName)
+        );
+        setTimeout(() => {
+          if (!dead) setDeclinedToast(null);
+        }, 4000);
+      }
+    );
+    return () => {
+      dead = true;
+      try {
+        createClient().removeChannel(ch);
+      } catch {
+        /* ignore */
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  const acceptChallenge = async (c: Challenge) => {
+    setChallenge(null);
+    try {
+      await respondChallenge(c.id, true);
+      const room = await joinRoom(c.room_code);
+      setOpenRoomId(room.id);
+      setMode("room");
+    } catch {
+      /* best-effort */
+    }
+    // Surface the next pending challenge, if any.
+    try {
+      const { incoming } = await fetchPendingChallenges();
+      if (incoming.length > 0) setChallenge(incoming[0]);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const declineChallenge = async (c: Challenge) => {
+    setChallenge(null);
+    try {
+      await respondChallenge(c.id, false);
+      const { incoming } = await fetchPendingChallenges();
+      if (incoming.length > 0) setChallenge(incoming[0]);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  /** FriendsView accept → join the challenge room and open it. */
+  const onAcceptChallengeFromFriends = async (c: Challenge) => {
+    try {
+      const room = await joinRoom(c.room_code);
+      setOpenRoomId(room.id);
+      setMode("room");
+    } catch {
+      /* best-effort */
+    }
+  };
 
   const s = STR[lang] as Record<string, string | string[]>;
 
@@ -63,8 +269,40 @@ export default function AppShell() {
     setDrawerOpen(false);
   };
 
+  const onPlayCustom = (pos: string, turn: Side) => {
+    setCustomStart({ pos, turn, nonce: Date.now() });
+    setMode("play");
+    setDrawerOpen(false);
+  };
+
   const actions = actionsRef.current;
   void actionsVersion; // re-read actionsRef after views publish their actions
+
+  const settingsBlock = (
+    <div className="cct-account-menu-settings">
+      <div className="cct-lang">
+        <button
+          className={lang === "vi" ? "active" : ""}
+          onClick={() => changeLang("vi")}
+        >
+          VI
+        </button>
+        <button
+          className={lang === "en" ? "active" : ""}
+          onClick={() => changeLang("en")}
+        >
+          EN
+        </button>
+      </div>
+      <button className="cct-btn small" onClick={toggleSound}>
+        {soundOn ? String(s.soundOn) : String(s.soundOff)}
+      </button>
+      <label className="cct-check-toggle">
+        <input type="checkbox" checked={bannerOn} onChange={toggleBanner} />
+        {String(s.bigCheckBanner)}
+      </label>
+    </div>
+  );
 
   return (
     <div className="cct-page">
@@ -104,13 +342,32 @@ export default function AppShell() {
               </button>
             </div>
             <div className="cct-user">
-              <button
-                className="cct-gear-btn"
-                onClick={() => setMenuOpen((v) => !v)}
-                aria-label={String(s.settings)}
-              >
-                ⚙️
-              </button>
+              {!user ? (
+                <>
+                  <button
+                    className="cct-btn small"
+                    onClick={() => setAuthOpen(true)}
+                  >
+                    {String(s.login)}
+                  </button>
+                  <button
+                    className="cct-gear-btn"
+                    onClick={() => setMenuOpen((v) => !v)}
+                    aria-label={String(s.settings)}
+                  >
+                    ⚙️
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="cct-avatar-btn"
+                  onClick={() => setMenuOpen((v) => !v)}
+                  aria-label={String(s.profile)}
+                  title={displayName}
+                >
+                  {(displayName || "?").slice(0, 1).toUpperCase()}
+                </button>
+              )}
               {menuOpen && (
                 <>
                   <div
@@ -118,33 +375,40 @@ export default function AppShell() {
                     onClick={() => setMenuOpen(false)}
                   />
                   <div className="cct-account-menu">
-                    <div className="cct-account-menu-settings">
-                      <div className="cct-lang">
+                    {user && (
+                      <>
                         <button
-                          className={lang === "vi" ? "active" : ""}
-                          onClick={() => changeLang("vi")}
+                          className="cct-btn"
+                          onClick={() => {
+                            setProfileOpen(true);
+                            setMenuOpen(false);
+                          }}
                         >
-                          VI
+                          {String(s.profile)}
                         </button>
                         <button
-                          className={lang === "en" ? "active" : ""}
-                          onClick={() => changeLang("en")}
+                          className="cct-btn"
+                          onClick={() => {
+                            setMode("friends");
+                            setMenuOpen(false);
+                          }}
                         >
-                          EN
+                          {String(s.friends)}
                         </button>
-                      </div>
-                      <button className="cct-btn small" onClick={toggleSound}>
-                        {soundOn ? String(s.soundOn) : String(s.soundOff)}
+                      </>
+                    )}
+                    {settingsBlock}
+                    {user && (
+                      <button
+                        className="cct-btn"
+                        onClick={() => {
+                          setMenuOpen(false);
+                          void signOut();
+                        }}
+                      >
+                        {String(s.logout)}
                       </button>
-                      <label className="cct-check-toggle">
-                        <input
-                          type="checkbox"
-                          checked={bannerOn}
-                          onChange={toggleBanner}
-                        />
-                        {String(s.bigCheckBanner)}
-                      </label>
-                    </div>
+                    )}
                   </div>
                 </>
               )}
@@ -202,6 +466,42 @@ export default function AppShell() {
                     {String(s.twoPlayer)}
                   </button>
                   <button
+                    data-active={mode === "setup"}
+                    onClick={() => switchMode("setup")}
+                  >
+                    {String(s.setup)}
+                  </button>
+                  <button
+                    data-active={mode === "history"}
+                    onClick={() => switchMode("history")}
+                  >
+                    {String(s.history)}
+                  </button>
+                  <button
+                    data-active={mode === "leaderboard"}
+                    onClick={() => switchMode("leaderboard")}
+                  >
+                    {String(s.leaderboard)}
+                  </button>
+                  <button
+                    data-active={mode === "room"}
+                    onClick={() => switchMode("room")}
+                  >
+                    {String(s.room)}
+                  </button>
+                  <button
+                    data-active={mode === "corr"}
+                    onClick={() => switchMode("corr")}
+                  >
+                    {String(s.corr)}
+                  </button>
+                  <button
+                    data-active={mode === "checkin"}
+                    onClick={() => switchMode("checkin")}
+                  >
+                    {String(s.checkin)}
+                  </button>
+                  <button
                     data-active={mode === "howto"}
                     onClick={() => switchMode("howto")}
                   >
@@ -240,6 +540,9 @@ export default function AppShell() {
           bannerOn={bannerOn}
           actionsRef={actionsRef}
           notifyActions={notifyActions}
+          customStart={customStart}
+          onClearCustom={() => setCustomStart(null)}
+          onLoginRequest={() => setAuthOpen(true)}
         />
       )}
       {mode === "2p" && (
@@ -250,9 +553,119 @@ export default function AppShell() {
           notifyActions={notifyActions}
         />
       )}
+      {mode === "setup" && (
+        <SetupView
+          lang={lang}
+          level={level}
+          onLevelChange={setLevel}
+          onPlayCustom={onPlayCustom}
+        />
+      )}
+      {mode === "history" && (
+        <HistoryView
+          lang={lang}
+          user={user ? { id: user.id } : null}
+          onLogin={() => setAuthOpen(true)}
+        />
+      )}
+      {mode === "leaderboard" && (
+        <LeaderboardView lang={lang} myUserId={user ? user.id : null} />
+      )}
+      {mode === "room" && (
+        <RoomView
+          lang={lang}
+          user={user ? { id: user.id } : null}
+          inviteCode={inviteCode}
+          onConsumeInvite={() => setInviteCode(null)}
+          onLogin={() => setAuthOpen(true)}
+          openRoomId={openRoomId}
+        />
+      )}
+      {mode === "corr" && (
+        <CorrView
+          lang={lang}
+          userId={user ? user.id : null}
+          onLogin={() => setAuthOpen(true)}
+          deepLinkGameId={corrDeepLinkId}
+        />
+      )}
+      {mode === "friends" && user && (
+        <FriendsView
+          lang={lang}
+          userId={user.id}
+          myName={displayName}
+          onAcceptChallenge={onAcceptChallengeFromFriends}
+        />
+      )}
+      {mode === "checkin" && (
+        <CheckinView
+          lang={lang}
+          user={user ? { id: user.id } : null}
+          onLogin={() => setAuthOpen(true)}
+        />
+      )}
       {mode === "howto" && <HowToView lang={lang} />}
+
+      {challenge && (
+        <div className="cct-modal-root">
+          <div className="cct-backdrop" />
+          <div className="cct-modal">
+            <h2>{String(s.challengeIncoming)}</h2>
+            <p>
+              {String(s.challengeFrom).replace(
+                "{name}",
+                challenge.challenger_name ?? "?"
+              )}
+            </p>
+            <p className="cct-hint">
+              {String(s.challengeRoomCode).replace(
+                "{code}",
+                challenge.room_code
+              )}
+            </p>
+            <div className="cct-actions">
+              <button
+                className="cct-btn cct-btn-primary"
+                onClick={() => void acceptChallenge(challenge)}
+              >
+                {String(s.challengeAccept)}
+              </button>
+              <button
+                className="cct-btn"
+                onClick={() => void declineChallenge(challenge)}
+              >
+                {String(s.challengeDecline)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {declinedToast && (
+        <div className="cct-toast" role="status">
+          {declinedToast}
+        </div>
+      )}
+
+      <AuthModal
+        lang={lang}
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+      />
+      <ProfileModal
+        lang={lang}
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+      />
 
       <footer className="cct-footer">{String(s.copyright)}</footer>
     </div>
+  );
+}
+
+export default function AppShell() {
+  return (
+    <AuthProvider>
+      <Shell />
+    </AuthProvider>
   );
 }
