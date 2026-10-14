@@ -9,7 +9,7 @@ import {
 import type { Side } from "@/lib/cct/engine";
 
 export interface CctVideoGame {
-  /** Move labels in "c,r-c,r" canon format. */
+  /** Move labels as stored: human labels ("L 1,4 → 1,3") or canon. */
   labels: string[];
   startPos?: string;
   startTurn?: Side;

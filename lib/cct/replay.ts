@@ -1,5 +1,12 @@
 // Replay helpers: decode a recorded game (start_pos + move labels) into
 // steppable states for the replay viewer and video export.
+//
+// STORED FORMAT: games and room matches persist moves as human labels
+// exactly as engine.moveLabel produces them ("L 1,4 → 1,3",
+// "T 3,5 × 2,4") — parsed by parseMoveLabel (the same parser live room
+// sync uses). Canon "c,r-c,r" strings are also accepted for safety.
+// This once used ONLY the canon parser, which matched nothing real:
+// every replay silently decoded to 0 plies (dead viewer, no export).
 import {
   applyMove,
   gameStatus,
@@ -12,9 +19,10 @@ import {
   type Side,
 } from "./engine";
 import { parseCanonMove } from "./canon";
+import { parseMoveLabel } from "@/lib/supabase/matchUtil";
 
 export interface ReplayGame {
-  /** Move labels in "c,r-c,r" format. */
+  /** Move labels as stored: human labels ("L 1,4 → 1,3") or canon. */
   labels: string[];
   /** 25-char start position (omit = standard initial). */
   startPos?: string;
@@ -46,7 +54,7 @@ export function buildReplayStates(g: ReplayGame): {
   const states: CctState[] = [s0];
   const plies: ReplayPly[] = [];
   for (const lab of g.labels) {
-    const parsed = parseCanonMove(lab);
+    const parsed = parseCanonMove(lab) ?? parseMoveLabel(lab);
     const st = states[states.length - 1];
     if (!parsed) break;
     const found = legalMoves(st).find(

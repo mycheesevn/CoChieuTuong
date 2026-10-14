@@ -50,34 +50,34 @@ export function ReplayView({ lang, game, onBack, onExportVideo }: Props) {
     state && isGeneralThreatened(state, state.turn) ? state.turn : null;
 
   return (
-    <div className="cct-scroll-area">
-      <div className="cct-view">
+    <div className="cct-layout">
+      <div className="cct-board-area">
+        <div className="cct-board-fit">
+          <Board
+            state={state}
+            interactive={false}
+            sel={null}
+            targets={[]}
+            lastMove={lastPly ? lastPly.move : null}
+            threatened={threatened}
+            captureFlash={null}
+            instances={(() => {
+              const m = new Map<number, number>();
+              for (let i = 0; i < 25; i++)
+                if (state.cells[i] !== 0) m.set(i, i);
+              return m;
+            })()}
+            onPoint={() => {}}
+          />
+        </div>
+      </div>
+
+      <aside className="cct-panel">
         <button type="button" className="cct-btn small" onClick={onBack}>
           ← {String(s.history)}
         </button>
         <h2>🎞️ {game.title}</h2>
         <p className="cct-hint">{game.subtitle}</p>
-
-        <div className="cct-board-area">
-          <div className="cct-board-fit">
-            <Board
-              state={state}
-              interactive={false}
-              sel={null}
-              targets={[]}
-              lastMove={lastPly ? lastPly.move : null}
-              threatened={threatened}
-              captureFlash={null}
-              instances={(() => {
-                const m = new Map<number, number>();
-                for (let i = 0; i < 25; i++)
-                  if (state.cells[i] !== 0) m.set(i, i);
-                return m;
-              })()}
-              onPoint={() => {}}
-            />
-          </div>
-        </div>
 
         <div className="cct-replay-controls">
           <button
@@ -143,7 +143,7 @@ export function ReplayView({ lang, game, onBack, onExportVideo }: Props) {
         />
 
         {plies.length > 0 && (
-          <div className="cct-panel">
+          <>
             <h3>{String(s.replayMoves)}</h3>
             <ol className="cct-replay-moves">
               {plies.map((p, i) => (
@@ -162,7 +162,7 @@ export function ReplayView({ lang, game, onBack, onExportVideo }: Props) {
                 </li>
               ))}
             </ol>
-          </div>
+          </>
         )}
 
         {onExportVideo && total > 0 && (
@@ -175,7 +175,7 @@ export function ReplayView({ lang, game, onBack, onExportVideo }: Props) {
             🎬 {String(s.videoExport)}
           </button>
         )}
-      </div>
+      </aside>
     </div>
   );
 }

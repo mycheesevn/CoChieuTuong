@@ -13,13 +13,14 @@ import {
   R_SOLDIER,
 } from "@/lib/cct/engine";
 
-/* Board geometry: viewBox 1080, grid points at 100 + k*220 (grid spans
-   100..980 = 81.5% of the board, PacClone-parity), wood panel 50..1030.
-   P0 satisfies every edge-anchored element: threat glow 82 (+5 stroke),
-   selection ring 78 (+2.5), piece shadow 74, hit circles 80. */
+/* Board geometry: viewBox 1080, grid points at 88 + k*226 (grid spans
+   88..992 = 83.7% of the board — the same fill as Chess's board),
+   wood panel 50..1030. P0 satisfies every edge-anchored element:
+   threat glow 82 (+5 stroke), selection ring 78 (+2.5), piece shadow
+   74, hit circles 80. */
 export const VB = 1080;
-const P0 = 100;
-const STEP = 220;
+const P0 = 88;
+const STEP = 226;
 const PANEL = 50; // wood panel starts here; panel is 50..1030
 const PANEL_SIZE = 980;
 const BAND = P0 - PANEL; // frame band holding the coordinate numbers
