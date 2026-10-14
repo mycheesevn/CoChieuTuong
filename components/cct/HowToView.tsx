@@ -64,7 +64,7 @@ const VI = (
 
 const EN = (
   <>
-    <h2>How to play Co Chieu Tuong</h2>
+    <h2>How to play Vietnamese General Check</h2>
     <h3>1. Setup</h3>
     <p>
       Two sides: <b>Red</b> (you, moving first) vs <b>Green</b> (the

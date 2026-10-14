@@ -6,15 +6,20 @@ import {
   applyMove,
   countSoldiers,
   gameStatus,
+  initialPos,
   isGeneralThreatened,
   legalMoves,
   moveLabel,
   initialState,
+  posToState,
   type CctState,
   type GameResult,
   type Move,
   type Side,
 } from "@/lib/cct/engine";
+import { recordCctGameEvent } from "@/lib/supabase/stats";
+import { recordCctGameResult } from "@/lib/supabase/results";
+import { useAuth } from "@/lib/supabase/auth";
 import { aiReply } from "@/lib/cct/ai";
 import {
   playCapture,
@@ -38,7 +43,17 @@ interface HistEntry {
   move: Move | null;
 }
 
-const freshHist = (): HistEntry[] => [{ state: initialState(), move: null }];
+const freshHist = (custom?: {
+  pos: string;
+  turn: Side;
+  nonce: number;
+} | null): HistEntry[] => {
+  if (custom) {
+    const st = posToState(custom.pos, custom.turn);
+    if (st) return [{ state: st, move: null }];
+  }
+  return [{ state: initialState(), move: null }];
+};
 
 export function reasonText(s: Record<string, string | string[]>, r: GameResult): string {
   if (r.outcome === "win") {
@@ -136,17 +151,40 @@ interface PlayViewProps {
   bannerOn: boolean;
   actionsRef: React.MutableRefObject<ViewActions | null>;
   notifyActions: () => void;
+  /** Custom start from the setup editor (pos = 25-char string, turn separate). */
+  customStart: { pos: string; turn: Side; nonce: number } | null;
+  onClearCustom: () => void;
+  onLoginRequest: () => void;
 }
 
-export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActions }: PlayViewProps) {
+export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActions, customStart, onClearCustom, onLoginRequest }: PlayViewProps) {
   const s = STR[lang] as Record<string, string | string[]>;
-  const [hist, setHist] = useState<HistEntry[]>(freshHist);
+  const { user, refreshStats } = useAuth();
+  const [hist, setHist] = useState<HistEntry[]>(() => freshHist(customStart));
   const [sel, setSel] = useState<number | null>(null);
   const [thinking, setThinking] = useState(false);
   const [resignWinner, setResignWinner] = useState<Side | null>(null);
   const [resignArmed, setResignArmed] = useState(false);
   const [flash, setFlash] = useState<{ sq: number; key: number } | null>(null);
+  const [xpToast, setXpToast] = useState<number | null>(null);
   const flashKey = useRef(0);
+  const gameStartedRef = useRef(false);
+  const recordedRef = useRef(false);
+
+  // A new custom position from the setup editor restarts the game.
+  const customNonce = customStart?.nonce;
+  useEffect(() => {
+    setHist(freshHist(customStart));
+    setSel(null);
+    setThinking(false);
+    setResignWinner(null);
+    setResignArmed(false);
+    setFlash(null);
+    setXpToast(null);
+    gameStartedRef.current = false;
+    recordedRef.current = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customNonce]);
 
   const cur = hist[hist.length - 1].state;
   const gs = useMemo(() => gameStatus(cur), [cur]);
@@ -172,9 +210,14 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
   const instances = usePieceInstances(moveSeq);
 
   const doMove = (move: Move) => {
+    const firstMove = hist.length === 1;
     const after = applyMove(cur, move);
     setHist((h) => [...h, { state: after, move }]);
     setSel(null);
+    if (firstMove && !gameStartedRef.current) {
+      gameStartedRef.current = true;
+      recordCctGameEvent("start", { level });
+    }
     if (move.capture) {
       flashKey.current += 1;
       setFlash({ sq: move.to, key: flashKey.current });
@@ -211,12 +254,19 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
   };
 
   const newGame = () => {
+    if (gameStartedRef.current && final.outcome === "ongoing") {
+      recordCctGameEvent("abandon", { level });
+    }
+    onClearCustom();
     setHist(freshHist());
     setSel(null);
     setThinking(false);
     setResignWinner(null);
     setResignArmed(false);
     setFlash(null);
+    setXpToast(null);
+    gameStartedRef.current = false;
+    recordedRef.current = false;
   };
 
   const undo = () => {
@@ -261,7 +311,7 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hist, level, playing]);
 
-  // game-over sounds (fire once)
+  // game-over: sounds (fire once) + result recording (fire once)
   const prevOutcome = useRef(final.outcome);
   useEffect(() => {
     if (prevOutcome.current === "ongoing" && final.outcome !== "ongoing") {
@@ -271,8 +321,43 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
       } else {
         playCheck();
       }
+      if (!recordedRef.current) {
+        recordedRef.current = true;
+        const result: "win" | "loss" | "draw" =
+          final.outcome === "draw"
+            ? "draw"
+            : final.winner === "r"
+              ? "win"
+              : "loss";
+        const reason =
+          final.outcome === "draw" ? "no-screens" : final.reason;
+        recordCctGameEvent("finish", { result, level });
+        if (user) {
+          const labels = hist
+            .slice(1)
+            .map((h, i) => moveLabel(hist[i].state, h.move as Move));
+          const startPos = customStart ? customStart.pos : initialPos();
+          void (async () => {
+            try {
+              const xp = await recordCctGameResult(
+                result,
+                reason,
+                level,
+                cur.plies,
+                startPos,
+                labels
+              );
+              setXpToast(xp);
+              await refreshStats();
+            } catch {
+              /* recording must never break the game-over screen */
+            }
+          })();
+        }
+      }
     }
     prevOutcome.current = final.outcome;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [final]);
 
   // resign arm timeout
@@ -323,6 +408,20 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
                   : String(s.greenWins)}
             </div>
             <div className="cct-reason">{reasonText(s, final)}</div>
+            {xpToast !== null && (
+              <div className="cct-xp-toast">＋{xpToast} XP</div>
+            )}
+            {!user && (
+              <div className="cct-guest-hint">
+                <p>{String(s.guestHint)}</p>
+                <button
+                  className="cct-btn small"
+                  onClick={onLoginRequest}
+                >
+                  {String(s.login)}
+                </button>
+              </div>
+            )}
             <button className="cct-btn cct-btn-primary" onClick={newGame}>
               {String(s.playAgain)}
             </button>
