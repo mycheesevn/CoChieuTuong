@@ -1,13 +1,29 @@
 /**
- * Phase 2C will wire this to the push-trigger route (challenge received,
- * your-turn, corr move, challenge declined). No-op in 2B so every caller
- * can fire events today without guarding on future infrastructure.
+ * Push-notification event wiring for Phase 2C.
+ * Callers fire events (challenge received, your-turn, corr move, challenge
+ * declined); the server verifies the real DB state before sending anything.
+ * Best-effort: failures here never break the game flow.
  */
+import { notifyPushTrigger } from "@/lib/push/client";
+
 export async function fireEvent(
   kind: "challenge" | "turn" | "corr" | "challenge_declined",
   payload: Record<string, string>
 ): Promise<void> {
-  void kind;
-  void payload;
-  /* Phase 2C wires this to the push trigger route; no-op in 2B */
+  try {
+    if (kind === "challenge" && payload.challenge) {
+      await notifyPushTrigger({ kind: "challenge", challengeId: payload.challenge });
+    } else if (kind === "challenge_declined" && payload.challenge) {
+      await notifyPushTrigger({
+        kind: "challenge_declined",
+        challengeId: payload.challenge,
+      });
+    } else if (kind === "turn" && payload.match) {
+      await notifyPushTrigger({ kind: "turn", matchId: payload.match });
+    } else if (kind === "corr" && payload.game) {
+      await notifyPushTrigger({ kind: "corr", gameId: payload.game });
+    }
+  } catch {
+    /* push is best-effort; never break the game flow */
+  }
 }
