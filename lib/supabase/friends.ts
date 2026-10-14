@@ -11,6 +11,38 @@ export interface Friend {
   user_id: string;
   name: string;
   avatar_url: string | null;
+  /** CCT XP from cct_stats (world-readable) — drives the Lv chip. */
+  xp: number;
+  /** Elo rating from cct_stats (migration 006); 800 before it lands. */
+  rating: number;
+}
+
+/** Batch-fetch XP + rating for a set of users (friend/search rows). */
+async function fetchXp(
+  ids: string[]
+): Promise<Map<string, { xp: number; rating: number }>> {
+  const out = new Map<string, { xp: number; rating: number }>();
+  if (ids.length === 0) return out;
+  try {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("cct_stats")
+      .select("*")
+      .in("user_id", ids);
+    for (const r of (data ?? []) as Array<{
+      user_id: string;
+      xp: number;
+      rating?: number | null;
+    }>) {
+      out.set(r.user_id, {
+        xp: Number(r.xp) || 0,
+        rating: Number(r.rating) || 800,
+      });
+    }
+  } catch {
+    /* stat chips are decorative */
+  }
+  return out;
 }
 
 export interface Challenge {
@@ -36,7 +68,7 @@ export async function listFriends(userId: string): Promise<Friend[]> {
     .eq("user_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return (
+  const rows = (
     (data ?? []) as unknown as Array<{
       friend_id: string;
       friend: {
@@ -51,6 +83,12 @@ export async function listFriends(userId: string): Promise<Friend[]> {
       p?.full_name?.trim() || p?.username?.trim() || "Player";
     return { user_id: f.friend_id, name, avatar_url: p?.avatar_url ?? null };
   });
+  const xp = await fetchXp(rows.map((r) => r.user_id));
+  return rows.map((r) => ({
+    ...r,
+    xp: xp.get(r.user_id)?.xp ?? 0,
+    rating: xp.get(r.user_id)?.rating ?? 800,
+  }));
 }
 
 /** Search profiles by username/full_name. */
@@ -69,7 +107,7 @@ export async function searchUsers(
     .neq("id", excludeId)
     .limit(limit);
   if (error) throw error;
-  return (
+  const rows = (
     (data ?? []) as unknown as Array<{
       id: string;
       full_name: string | null;
@@ -80,6 +118,12 @@ export async function searchUsers(
     user_id: p.id,
     name: p.full_name?.trim() || p.username?.trim() || "Player",
     avatar_url: p.avatar_url,
+  }));
+  const xp = await fetchXp(rows.map((r) => r.user_id));
+  return rows.map((r) => ({
+    ...r,
+    xp: xp.get(r.user_id)?.xp ?? 0,
+    rating: xp.get(r.user_id)?.rating ?? 800,
   }));
 }
 

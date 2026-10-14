@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { STR, type Lang } from "@/lib/cct/i18n";
+import { levelForXp } from "@/lib/cct/levels";
 import {
   cancelChallenge,
   fetchPendingChallenges,
@@ -78,6 +79,9 @@ export default function FriendsView({
   const [incoming, setIncoming] = useState<Challenge[]>([]);
   const [outgoing, setOutgoing] = useState<Challenge[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  /** Visible failure line (role=alert) — a failed action must NEVER be
+   *  silent; the old bare catches hid the broken challenge flow. */
+  const [actionError, setActionError] = useState("");
 
   const loadFriends = async () => {
     try {
@@ -125,57 +129,83 @@ export default function FriendsView({
   }, [query, userId]);
 
   const toggleFollow = (f: Friend, following: boolean) => {
+    setActionError("");
     (following ? unfollow(userId, f.user_id) : follow(userId, f.user_id))
       .then(loadFriends)
-      .catch(() => {});
+      .catch(() => setActionError(String(s.friendsActionError)));
   };
 
   const onChallenge = async (f: Friend) => {
+    setActionError("");
     try {
       await sendChallenge(f.user_id, myName);
       setNotice(String(s.challengeSent));
       setTimeout(() => setNotice(null), 2500);
       await loadChallenges();
     } catch {
-      /* best-effort */
+      setActionError(String(s.friendsActionError));
     }
   };
 
   const onAccept = async (c: Challenge) => {
+    setActionError("");
     try {
       await respondChallenge(c.id, true);
       setIncoming((prev) => prev.filter((x) => x.id !== c.id));
       onAcceptChallenge(c);
     } catch {
-      /* best-effort */
+      setActionError(String(s.friendsActionError));
     }
   };
 
   const onDecline = async (c: Challenge) => {
+    setActionError("");
     try {
       await respondChallenge(c.id, false);
       setIncoming((prev) => prev.filter((x) => x.id !== c.id));
     } catch {
-      /* best-effort */
+      setActionError(String(s.friendsActionError));
     }
   };
 
   const onCancel = async (c: Challenge) => {
+    setActionError("");
     try {
       await cancelChallenge(c.id);
       setOutgoing((prev) => prev.filter((x) => x.id !== c.id));
     } catch {
-      /* best-effort */
+      setActionError(String(s.friendsActionError));
     }
   };
 
   const friendIds = new Set(friends.map((f) => f.user_id));
+
+  /** Avatar + name + level chip — the family-standard friend row. */
+  const friendIdentity = (f: Friend) => (
+    <span className="cct-lb-name cct-friend-id">
+      {f.avatar_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={f.avatar_url} alt="" className="cct-friend-avatar" />
+      ) : (
+        <span className="cct-friend-avatar cct-friend-avatar-fallback">
+          {(f.name.trim()[0] ?? "👤").toUpperCase()}
+        </span>
+      )}
+      {f.name}
+      <span className="cct-hint">⭐ {f.rating} · Lv {levelForXp(f.xp)}</span>
+    </span>
+  );
 
   return (
     <div className="cct-scroll-area">
       <div className="cct-view">
         <h2>{String(s.friendsTitle)}</h2>
         {notice && <div className="cct-xp-toast">{notice}</div>}
+        {actionError && (
+          <p role="alert" className="cct-error">
+            {actionError}
+          </p>
+        )}
 
         {incoming.length > 0 && (
           <div className="cct-panel">
@@ -258,8 +288,15 @@ export default function FriendsView({
               const following = friendIds.has(f.user_id);
               return (
                 <li key={f.user_id} className="cct-lb-row">
-                  <span className="cct-lb-name">{f.name}</span>
+                  {friendIdentity(f)}
                   <span className="cct-row-actions">
+                    <button
+                      type="button"
+                      className="cct-btn small cct-btn-primary"
+                      onClick={() => void onChallenge(f)}
+                    >
+                      {String(s.friendsChallenge)}
+                    </button>
                     <button
                       type="button"
                       className={`cct-btn small${
@@ -279,14 +316,16 @@ export default function FriendsView({
         </div>
 
         <div className="cct-panel">
-          <h3>{String(s.friendsMyList)}</h3>
+          <h3>
+            {String(s.friendsMyList)} ({friends.length})
+          </h3>
           {friends.length === 0 ? (
             <p className="cct-empty-note">{String(s.friendsEmpty)}</p>
           ) : (
             <ul className="cct-board-list">
               {friends.map((f) => (
                 <li key={f.user_id} className="cct-lb-row">
-                  <span className="cct-lb-name">{f.name}</span>
+                  {friendIdentity(f)}
                   <span className="cct-row-actions">
                     <button
                       type="button"

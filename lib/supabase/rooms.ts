@@ -154,55 +154,26 @@ export function displayName(p: {
   return p.full_name || p.username || "Player";
 }
 
-const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-
-export function genCode(): string {
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
-  }
-  return code;
-}
-
-/** Create a room via direct INSERT — the migration ships a
- *  "cct_rooms leader insert" policy (auth.uid() = leader_id) — then add
- *  the leader's member row. Retries 3× on code collision. */
+/** Create a room via the cct_create_room SECURITY DEFINER RPC
+ *  (migration 005). The old direct INSERT + .select() read-back was
+ *  invisible to its own creator under the rooms SELECT policy for
+ *  PRIVATE rooms (leader not yet a member, room not public), so
+ *  private-room creation — and every friend challenge — silently
+ *  failed in production. The RPC inserts the room + leader member row
+ *  atomically and returns the room. */
 export async function createRoom(
   name: string,
   isPublic: boolean,
   maxPlayers = 8
 ): Promise<Room> {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not signed in");
-  let lastErr: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const { data, error } = await supabase
-      .from("cct_rooms")
-      .insert({
-        code: genCode(),
-        name,
-        leader_id: user.id,
-        is_public: isPublic,
-        max_players: maxPlayers,
-        turn_order: [user.id],
-      })
-      .select()
-      .single();
-    if (!error && data) {
-      await supabase.from("cct_room_members").insert({
-        room_id: (data as Room).id,
-        user_id: user.id,
-        role: "player",
-      });
-      return data as Room;
-    }
-    lastErr = error;
-    if (error && !/duplicate|unique/i.test(error.message)) break;
-  }
-  throw lastErr ?? new Error("create failed");
+  const { data, error } = await supabase.rpc("cct_create_room", {
+    p_name: name,
+    p_is_public: isPublic,
+    p_max_players: maxPlayers,
+  });
+  if (error) throw error;
+  return data as Room;
 }
 
 /** Join via the cct_join_room RPC — a direct SELECT by code cannot
