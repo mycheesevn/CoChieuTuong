@@ -197,6 +197,7 @@ export function ProfileModal({ lang, open, onClose }: Props) {
             {user.email && <div className="cct-profile-email">{user.email}</div>}
 
             <div className="cct-profile-stats">
+              {stat(s?.rating ?? 800, "profileRating", "Rating")}
               {stat(s?.xp ?? 0, "profileXp", "XP")}
               {stat(s?.wins ?? 0, "profileWins", lang === "vi" ? "Thắng" : "Wins")}
               {stat(s?.losses ?? 0, "profileLosses", lang === "vi" ? "Thua" : "Losses")}

@@ -24,6 +24,7 @@ import { recordCctGameEvent } from "@/lib/supabase/stats";
 import { recordCctGameResult } from "@/lib/supabase/results";
 import { useAuth } from "@/lib/supabase/auth";
 import { aiReply } from "@/lib/cct/ai";
+import { burstConfetti } from "@/lib/cct/confetti";
 import {
   playCapture,
   playCheck,
@@ -364,8 +365,12 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
   useEffect(() => {
     if (prevOutcome.current === "ongoing" && final.outcome !== "ongoing") {
       if (final.outcome === "win") {
-        if (final.winner === "r") playWin();
-        else playLose();
+        if (final.winner === "r") {
+          playWin();
+          // Checkmate win → paper-fireworks burst (family pattern:
+          // Chess/PacClone fire confetti on mate, not on resign/stalemate).
+          if (final.reason === "checkmate") burstConfetti();
+        } else playLose();
       } else {
         playCheck();
       }

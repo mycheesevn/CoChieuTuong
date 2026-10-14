@@ -45,6 +45,7 @@ import {
   playSelect,
   playWin,
 } from "@/lib/cct/sound";
+import { burstConfetti } from "@/lib/cct/confetti";
 import { STR, type Lang } from "@/lib/cct/i18n";
 
 interface Props {
@@ -339,6 +340,24 @@ export default function RoomMatchView({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localStatus, match.status, match.id]);
+
+  // Checkmate celebration: a confetti burst for the winner, once per
+  // match (Chess/PacClone pattern). Runs off the confirmed server
+  // result, so it fires whether the finish was detected locally or
+  // arrived via polling; losers and spectators don't get confetti.
+  const celebratedMateRef = useRef<string | null>(null);
+  const mateWinner: Side | null =
+    final && final.outcome === "win" && final.reason === "checkmate"
+      ? final.winner
+      : null;
+  useEffect(() => {
+    if (match.status !== "finished" || mateWinner === null) return;
+    if (mateWinner !== mySide) return;
+    if (celebratedMateRef.current === match.id) return;
+    celebratedMateRef.current = match.id;
+    const t = window.setTimeout(() => burstConfetti(), 450);
+    return () => window.clearTimeout(t);
+  }, [match.status, match.id, mateWinner, mySide]);
 
   /* ---------------- moves ---------------- */
   const doMove = (move: Move) => {
