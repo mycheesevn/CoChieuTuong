@@ -995,6 +995,29 @@ body {
   border-radius: 8px;
   padding: 10px 14px;
 }
+
+/* Friends rows: avatar + name + level chip (family-standard row). */
+.cct-friend-id {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.cct-friend-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: none;
+}
+.cct-friend-avatar-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent, #b5452f);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
 .cct-lb-head {
   display: flex;
   align-items: center;
@@ -1023,6 +1046,45 @@ body {
 .cct-lb-me {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* My-rank card + PacClone-style rows (leaderboard parity). */
+.cct-lb-me-card {
+  background: var(--panel);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.cct-lb-me-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.cct-lb-me-label {
+  font-weight: 700;
+  flex: 1;
+}
+.cct-lb-section {
+  margin: 14px 0 8px;
+}
+.cct-lb-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cct-lb-sub {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.cct-lb-stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 0.9rem;
 }
 
 /* ---------- leaderboard tabs + site statistics ---------- */
