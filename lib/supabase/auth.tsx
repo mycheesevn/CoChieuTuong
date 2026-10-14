@@ -34,6 +34,9 @@ export interface CctStats {
   losses: number;
   draws: number;
   games_played: number;
+  /** Elo rating (migration 006); 800 until the migration lands. */
+  rating: number;
+  peak_rating: number;
 }
 
 interface AuthCtx {
@@ -71,7 +74,7 @@ async function fetchCctStats(uid: string): Promise<CctStats | null> {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("cct_stats")
-      .select("xp, wins, losses, draws, games_played")
+      .select("*")
       .eq("user_id", uid)
       .maybeSingle();
     if (error || !data) return null;
@@ -82,6 +85,8 @@ async function fetchCctStats(uid: string): Promise<CctStats | null> {
       losses: row.losses ?? 0,
       draws: row.draws ?? 0,
       games_played: row.games_played ?? 0,
+      rating: row.rating ?? 800,
+      peak_rating: row.peak_rating ?? 800,
     };
   } catch {
     return null;
