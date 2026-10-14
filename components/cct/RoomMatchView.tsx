@@ -29,7 +29,7 @@ import {
   REACTIONS,
   startRematch,
   subscribeMatch,
-  unreact,
+  subscribeReactions,
   type RoomComment,
   type RoomMatch,
   type XpEarned,
@@ -57,6 +57,8 @@ interface Props {
   names: { red: string; green: string };
   onExit: () => void;
   onMatchChange: (m: RoomMatch) => void;
+  /** Guests: tapping the react teaser asks the host to open login. */
+  onRequireLogin?: () => void;
 }
 
 const owns = (cell: number, side: Side): boolean =>
@@ -83,6 +85,7 @@ export default function RoomMatchView({
   names,
   onExit,
   onMatchChange,
+  onRequireLogin,
 }: Props) {
   const s = STR[lang] as Record<string, string | string[]>;
   const { refreshStats } = useAuth();
@@ -96,9 +99,6 @@ export default function RoomMatchView({
   const [comments, setComments] = useState<RoomComment[]>([]);
   const [commentNames, setCommentNames] = useState<Record<string, string>>({});
   const [commentBody, setCommentBody] = useState("");
-  const [reactions, setReactions] = useState<
-    Array<{ id: string; user_id: string; emoji: string }>
-  >([]);
   const [shared, setShared] = useState(false);
   const [resignArmed, setResignArmed] = useState(false);
   const [cancelArmed, setCancelArmed] = useState(false);
@@ -176,6 +176,8 @@ export default function RoomMatchView({
   /* ---------------- realtime + polling ---------------- */
   useEffect(() => {
     finishGuard.current = false;
+    seenReactionIds.current = new Set();
+    reactionsPrimed.current = false;
     let dead = false;
     const ch = subscribeMatch(
       match.id,
@@ -194,18 +196,28 @@ export default function RoomMatchView({
         const m = await getMatchById(match.id);
         if (!dead && m) onMatchChange(m);
         if (!guest) {
-          const [cmts, reacts] = await Promise.all([
-            fetchComments(roomId).catch(() => [] as RoomComment[]),
-            fetchReactions(match.id).catch(() => []),
-          ]);
+          const cmts = await fetchComments(roomId).catch(
+            () => [] as RoomComment[]
+          );
           if (dead) return;
           setComments(cmts.filter((c) => c.match_id === match.id));
-          setReactions(reacts);
           const names = await fetchNames(
             cmts.map((c) => c.user_id)
           ).catch(() => ({}));
           if (!dead) setCommentNames(names);
         }
+        // Reaction floaters, polling fallback (realtime is primary in
+        // production; this also covers environments without a realtime
+        // socket). The first fetch only primes the seen-set so joining a
+        // match doesn't burst old reactions over the board.
+        const reacts = await fetchReactions(match.id).catch(() => []);
+        if (dead) return;
+        for (const r of reacts) {
+          if (seenReactionIds.current.has(r.id)) continue;
+          seenReactionIds.current.add(r.id);
+          if (reactionsPrimed.current) spawnFloater(r.emoji);
+        }
+        reactionsPrimed.current = true;
       } catch {
         /* polling is best-effort */
       }
@@ -223,6 +235,54 @@ export default function RoomMatchView({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [match.id]);
+
+  /* ---------------- reaction floaters (PacClone pattern) ----------------
+   * Floaters render INSIDE the board container and rise over the board;
+   * the bar lives in the actions row under the board — never in the side
+   * panel. Sends are throttled; the sender sees their own floater via the
+   * realtime echo. */
+  const [floaters, setFloaters] = useState<
+    Array<{ id: number; emoji: string; x: number }>
+  >([]);
+  const floaterId = useRef(0);
+  const lastReactRef = useRef(0);
+  const seenReactionIds = useRef<Set<string>>(new Set());
+  const reactionsPrimed = useRef(false);
+  const spawnFloater = (emoji: string) => {
+    const id = ++floaterId.current;
+    const x = 8 + Math.random() * 76; // % across the board
+    setFloaters((f) => [...f.slice(-11), { id, emoji, x }]);
+    window.setTimeout(
+      () => setFloaters((f) => f.filter((fl) => fl.id !== id)),
+      2200
+    );
+  };
+  useEffect(() => {
+    const ch = subscribeReactions(match.id, (emoji, rowId) => {
+      // Dedup against the polling path below (both may deliver a row).
+      if (rowId) {
+        if (seenReactionIds.current.has(rowId)) return;
+        seenReactionIds.current.add(rowId);
+      }
+      spawnFloater(emoji);
+    });
+    return () => {
+      try {
+        createClient().removeChannel(ch);
+      } catch {
+        /* ignore */
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [match.id]);
+
+  const doReact = (emoji: string) => {
+    if (!userId || guest) return;
+    const now = Date.now();
+    if (now - lastReactRef.current < 1500) return; // throttle
+    lastReactRef.current = now;
+    react(match.id, emoji).catch(() => {});
+  };
 
   // resign arm timeout
   useEffect(() => {
@@ -396,17 +456,6 @@ export default function RoomMatchView({
       .catch(() => {});
   };
 
-  const toggleReaction = (emoji: string) => {
-    if (!userId) return;
-    const mine = reactions.find(
-      (r) => r.emoji === emoji && r.user_id === userId
-    );
-    (mine ? unreact(match.id, emoji) : react(match.id, emoji))
-      .then(() => fetchReactions(match.id))
-      .then(setReactions)
-      .catch(() => {});
-  };
-
   if (!cur) {
     return (
       <div className="cct-panel">
@@ -419,13 +468,9 @@ export default function RoomMatchView({
   const watcherCount =
     isPlayer && mySide ? Math.max(0, watchers - 2) : watchers;
 
-  const reactionCounts = new Map<string, number>();
-  for (const r of reactions) {
-    reactionCounts.set(r.emoji, (reactionCounts.get(r.emoji) ?? 0) + 1);
-  }
-
   return (
     <div className="cct-layout">
+      <div className="cct-board-col">
       <div className="cct-board-area">
         <div className="cct-board-fit">
           <Board
@@ -440,7 +485,65 @@ export default function RoomMatchView({
             instances={instances}
             onPoint={onPoint}
           />
+          {floaters.map((f) => (
+            <span
+              key={f.id}
+              className="cct-reaction-float"
+              style={{ left: `${f.x}%` }}
+              aria-hidden="true"
+            >
+              {f.emoji}
+            </span>
+          ))}
         </div>
+      </div>
+      {match.status === "active" && !final && (
+        <div className="cct-room-match-actions">
+          {!guest && userId ? (
+            <div
+              className="cct-reaction-bar"
+              role="group"
+              aria-label={lang === "vi" ? "Thả biểu tượng" : "React"}
+            >
+              {REACTIONS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  className="cct-reaction-btn"
+                  onClick={() => doReact(e)}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          ) : guest && onRequireLogin ? (
+            <button type="button" className="cct-btn small" onClick={onRequireLogin}>
+              👏🔥 {String(s.guestReactTeaser)}
+            </button>
+          ) : null}
+          {playing && isPlayer && (
+            <button
+              className={`cct-btn small${resignArmed ? " cct-btn-danger" : ""}`}
+              onClick={onResign}
+            >
+              {resignArmed ? String(s.roomResignConfirm) : String(s.roomResign)}
+            </button>
+          )}
+          {isLeader && (
+            <button
+              className={`cct-btn small${cancelArmed ? " cct-btn-danger" : ""}`}
+              onClick={onCancel}
+            >
+              {cancelArmed
+                ? String(s.roomCancelConfirm)
+                : String(s.roomCancelMatch)}
+            </button>
+          )}
+          <button className="cct-btn small" onClick={onExit}>
+            {String(s.roomBackToRoom)}
+          </button>
+        </div>
+      )}
       </div>
       <div className="cct-panel">
         <div className="cct-vs-header">
@@ -531,17 +634,6 @@ export default function RoomMatchView({
         <CapturedRow s={s} cur={cur} />
         <MoveLog s={s} hist={hist} />
 
-        {playing && isPlayer && (
-          <div className="cct-actions">
-            <button
-              className={`cct-btn${resignArmed ? " cct-btn-danger" : ""}`}
-              onClick={onResign}
-            >
-              {resignArmed ? String(s.roomResignConfirm) : String(s.roomResign)}
-            </button>
-          </div>
-        )}
-
         <div className="cct-panel">
           <h3>{String(s.roomComments)}</h3>
           {guest ? (
@@ -578,48 +670,6 @@ export default function RoomMatchView({
           </ul>
         </div>
 
-        <div className="cct-panel">
-          <h3>🎭</h3>
-          {guest ? (
-            <p className="cct-hint">{String(s.guestReactTeaser)}</p>
-          ) : (
-            <div className="cct-reactions">
-              {REACTIONS.map((emoji) => {
-                const mine = reactions.some(
-                  (r) => r.emoji === emoji && r.user_id === userId
-                );
-                return (
-                  <button
-                    key={emoji}
-                    type="button"
-                    className={`cct-react${mine ? " mine" : ""}`}
-                    onClick={() => toggleReaction(emoji)}
-                  >
-                    {emoji} {reactionCounts.get(emoji) ?? 0}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {match.status === "active" && !final && (
-          <div className="cct-actions">
-            {isLeader && (
-              <button
-                className={`cct-btn${cancelArmed ? " cct-btn-danger" : ""}`}
-                onClick={onCancel}
-              >
-                {cancelArmed
-                  ? String(s.roomCancelConfirm)
-                  : String(s.roomCancelMatch)}
-              </button>
-            )}
-            <button className="cct-btn" onClick={onExit}>
-              {String(s.roomBackToRoom)}
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

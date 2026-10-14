@@ -149,6 +149,7 @@ export default function GuestRooms({ lang, inviteCode, onLogin }: Props) {
               names={{ red: redName, green: greenName }}
               onExit={() => setDetail(null)}
               onMatchChange={() => {}}
+              onRequireLogin={onLogin}
             />
           ) : (
             <p className="cct-empty-note">{String(s.guestNoMatch)}</p>
