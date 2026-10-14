@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Board, { usePieceInstances } from "./Board";
+import { ReplayView } from "./ReplayView";
+import { VideoExportModal, type CctVideoGame } from "./VideoExportModal";
+import type { ReplayGame } from "@/lib/cct/replay";
 import {
   applyMove,
   countSoldiers,
@@ -30,6 +33,7 @@ import {
   playWin,
 } from "@/lib/cct/sound";
 import { STR, type Lang } from "@/lib/cct/i18n";
+import { renderShareCard, sharePng } from "@/lib/cct/shareCard";
 
 export interface ViewActions {
   undo: () => void;
@@ -63,6 +67,48 @@ export function reasonText(s: Record<string, string | string[]>, r: GameResult):
   }
   if (r.outcome === "draw") return String(s.reasonNoScreens);
   return "";
+}
+
+export function ShareGameButton({
+  s,
+  lang,
+  level,
+  state,
+  resultText,
+}: {
+  s: Record<string, string | string[]>;
+  lang: Lang;
+  level: number;
+  state: CctState;
+  resultText: string;
+}) {
+  const [busy, setBusy] = useState(false);
+  const share = async () => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const blob = await renderShareCard({
+        state,
+        headline: resultText.replace(/🎉\s*/, ""),
+        subline:
+          lang === "vi"
+            ? `Cấp ${level} · ${state.plies} nước`
+            : `Level ${level} · ${state.plies} moves`,
+        appName: lang === "vi" ? "Cờ Chiếu Tướng" : "Vietnamese General Check",
+        appUrl: "cochieutuong-my-cheese-vn.vercel.app",
+      });
+      await sharePng(blob, String(s.share), String(s.puzzleShareText));
+    } catch {
+      /* best-effort */
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <button type="button" className="cct-btn" disabled={busy} onClick={share}>
+      {String(s.share)}
+    </button>
+  );
 }
 
 export function CapturedRow({
@@ -170,6 +216,8 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
   const flashKey = useRef(0);
   const gameStartedRef = useRef(false);
   const recordedRef = useRef(false);
+  const [replay, setReplay] = useState<ReplayGame | null>(null);
+  const [videoGame, setVideoGame] = useState<CctVideoGame | null>(null);
 
   // A new custom position from the setup editor restarts the game.
   const customNonce = customStart?.nonce;
@@ -375,6 +423,32 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
         ? String(s.aiThinking)
         : String(s.yourTurnGreen);
 
+  if (replay) {
+    return (
+      <>
+        <ReplayView
+          lang={lang}
+          game={replay}
+          onBack={() => setReplay(null)}
+          onExportVideo={(g) =>
+            setVideoGame({
+              labels: g.labels,
+              startPos: g.startPos,
+              startTurn: g.startTurn,
+              title: g.title,
+              subtitle: g.subtitle,
+            })
+          }
+        />
+        <VideoExportModal
+          lang={lang}
+          game={videoGame}
+          onClose={() => setVideoGame(null)}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="cct-layout">
       <div className="cct-board-area">
@@ -425,6 +499,37 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
             <button className="cct-btn cct-btn-primary" onClick={newGame}>
               {String(s.playAgain)}
             </button>
+            <button
+              type="button"
+              className="cct-btn"
+              onClick={() => {
+                const labels = hist
+                  .slice(1)
+                  .map((h, i) => moveLabel(hist[i].state, h.move as Move));
+                setReplay({
+                  labels,
+                  startPos: customStart ? customStart.pos : initialPos(),
+                  startTurn: "r",
+                  title: String(s.replay),
+                  subtitle: `${labels.length} ${lang === "vi" ? "nước" : "plies"}`,
+                });
+              }}
+            >
+              {String(s.replay)}
+            </button>
+            <ShareGameButton
+              s={s}
+              lang={lang}
+              level={level}
+              state={cur}
+              resultText={
+                final.outcome === "draw"
+                  ? String(s.draw)
+                  : final.outcome === "win" && final.winner === "r"
+                    ? String(s.redWins)
+                    : String(s.greenWins)
+              }
+            />
           </div>
         )}
         <div className={`cct-status${threatened ? " check" : ""}`}>

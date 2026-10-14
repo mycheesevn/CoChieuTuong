@@ -23,6 +23,8 @@ interface Props {
   level: number;
   onLevelChange: (n: number) => void;
   onPlayCustom: (pos: string, turn: Side) => void;
+  /** Optional: publish the arranged position as a community puzzle. */
+  onPublishPuzzle?: (pos: string, turn: Side) => void;
 }
 
 type Tool =
@@ -60,7 +62,7 @@ function Disc({ cell }: { cell: Cell }) {
   );
 }
 
-export function SetupView({ lang, level, onLevelChange, onPlayCustom }: Props) {
+export function SetupView({ lang, level, onLevelChange, onPlayCustom, onPublishPuzzle }: Props) {
   const s = STR[lang] as Record<string, string | string[]>;
   const [tab, setTab] = useState<"editor" | "play">("editor");
   const [cells, setCells] = useState<Cell[]>(() => initialState().cells.slice());
@@ -320,6 +322,29 @@ export function SetupView({ lang, level, onLevelChange, onPlayCustom }: Props) {
                 >
                   ▶ {String(s.setupStart)}
                 </button>
+                {onPublishPuzzle && (
+                  <button
+                    type="button"
+                    className="cct-btn"
+                    onClick={() => {
+                      const err = validatePos({ cells, turn, plies: 0 });
+                      if (err) {
+                        setError(
+                          err === "generals"
+                            ? String(s.setupErrGenerals)
+                            : err === "soldiers"
+                              ? String(s.setupErrSoldiers)
+                              : String(s.setupErrCheck)
+                        );
+                        return;
+                      }
+                      setError(null);
+                      onPublishPuzzle(stateToPos(cells), turn);
+                    }}
+                  >
+                    🧩 {String(s.puzzleUseAsPuzzle)}
+                  </button>
+                )}
               </div>
             </section>
           )}

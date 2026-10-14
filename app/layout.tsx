@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import Script from "next/script";
 import { ICON_VERSION } from "@/lib/cct/iconSvg";
 import "./globals.css";
 
@@ -32,6 +33,13 @@ export default function RootLayout({
   return (
     <html lang="vi">
       <body>{children}</body>
+      <Script id="sw-register" strategy="afterInteractive">
+        {`if ("serviceWorker" in navigator) {
+          window.addEventListener("load", function () {
+            navigator.serviceWorker.register("/sw.js").catch(function () {});
+          });
+        }`}
+      </Script>
     </html>
   );
 }

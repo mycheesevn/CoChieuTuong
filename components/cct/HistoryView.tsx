@@ -8,6 +8,9 @@ import {
   type MyRoomMatch,
 } from "@/lib/supabase/rooms";
 import { Pagination } from "./Pagination";
+import { ReplayView } from "./ReplayView";
+import { VideoExportModal, type CctVideoGame } from "./VideoExportModal";
+import type { ReplayGame } from "@/lib/cct/replay";
 
 const PAGE_SIZE = 10;
 
@@ -55,6 +58,8 @@ export function HistoryView({ lang, user, onLogin }: Props) {
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [roomMatches, setRoomMatches] = useState<MyRoomMatch[]>([]);
+  const [replay, setReplay] = useState<ReplayGame | null>(null);
+  const [videoGame, setVideoGame] = useState<CctVideoGame | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -111,6 +116,40 @@ export function HistoryView({ lang, user, onLogin }: Props) {
     );
   }
 
+  if (replay) {
+    return (
+      <>
+        <ReplayView
+          lang={lang}
+          game={replay}
+          onBack={() => setReplay(null)}
+          onExportVideo={(g) =>
+            setVideoGame({
+              labels: g.labels,
+              startPos: g.startPos,
+              startTurn: g.startTurn,
+              title: g.title,
+              subtitle: g.subtitle,
+            })
+          }
+        />
+        <VideoExportModal
+          lang={lang}
+          game={videoGame}
+          onClose={() => setVideoGame(null)}
+        />
+      </>
+    );
+  }
+
+  const toReplay = (g: CctGameRow): ReplayGame => ({
+    labels: g.moves,
+    startPos: g.start_pos && g.start_pos.length === 25 ? g.start_pos : undefined,
+    startTurn: "r",
+    title: `${levelShort(lang, g.level)} · ${g.plies} ${lang === "vi" ? "nước" : "plies"}`,
+    subtitle: `${fmtDate(g.created_at)}${g.reason ? ` · ${reasonLabel(g.reason, s)}` : ""}`,
+  });
+
   return (
     <div className="cct-scroll-area">
       <div className="cct-view">
@@ -137,6 +176,16 @@ export function HistoryView({ lang, user, onLogin }: Props) {
                       {reason ? ` · ${reason}` : ""}
                     </span>
                     <span className="cct-lb-title">{fmtDate(g.created_at)}</span>
+                    {g.moves.length > 0 && (
+                      <button
+                        type="button"
+                        className="cct-btn small"
+                        onClick={() => setReplay(toReplay(g))}
+                        title={String(s.replay)}
+                      >
+                        🎞️
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -150,6 +199,7 @@ export function HistoryView({ lang, user, onLogin }: Props) {
           loading={loading}
           s={s}
           fmtDate={fmtDate}
+          onReplay={setReplay}
         />
       </div>
     </div>
@@ -162,12 +212,14 @@ function RoomMatchesSection({
   loading,
   s,
   fmtDate,
+  onReplay,
 }: {
   lang: Lang;
   matches: MyRoomMatch[];
   loading: boolean;
   s: Record<string, string | string[]>;
   fmtDate: (iso: string) => string;
+  onReplay: (g: ReplayGame) => void;
 }) {
   const [page, setPage] = useState(0);
   const pageCount = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
@@ -204,6 +256,23 @@ function RoomMatchesSection({
               <span className="cct-lb-title">
                 {fmtDate(m.finished_at ?? m.created_at ?? "")}
               </span>
+              {m.moves.length > 0 && (
+                <button
+                  type="button"
+                  className="cct-btn small"
+                  onClick={() =>
+                    onReplay({
+                      labels: m.moves,
+                      startTurn: "r",
+                      title: `⚔️ ${opponentName} · ${roomName}`,
+                      subtitle: `${m.moves.length} ${lang === "vi" ? "nước" : "plies"}${reason ? ` · ${reason}` : ""}`,
+                    })
+                  }
+                  title={String(s.replay)}
+                >
+                  🎞️
+                </button>
+              )}
             </li>
           );
         })}

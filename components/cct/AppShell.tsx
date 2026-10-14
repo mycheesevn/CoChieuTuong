@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PlayView, { type ViewActions } from "./PlayView";
 import TwoPlayerView from "./TwoPlayerView";
 import HowToView from "./HowToView";
@@ -11,6 +11,11 @@ import { SetupView } from "./SetupView";
 import RoomView from "./RoomView";
 import CorrView from "./CorrView";
 import FriendsView from "./FriendsView";
+import { LibraryView } from "./LibraryView";
+import { PuzzleView } from "./PuzzleView";
+import { CommunityView } from "./CommunityView";
+import { NotificationsView } from "./NotificationsView";
+import { PushNudge, PushSettings } from "./PushSettings";
 import { AuthModal } from "./AuthModal";
 import { ProfileModal } from "./ProfileModal";
 import { AuthProvider, useAuth } from "@/lib/supabase/auth";
@@ -24,17 +29,22 @@ import {
   type Challenge,
 } from "@/lib/supabase/friends";
 import { joinRoom } from "@/lib/supabase/rooms";
+import { fetchNotifications } from "@/lib/supabase/notifications";
 import { createClient } from "@/lib/supabase/client";
 
 type Mode =
   | "play"
   | "2p"
+  | "puzzle"
+  | "bikip"
   | "setup"
   | "history"
   | "leaderboard"
   | "room"
   | "corr"
   | "checkin"
+  | "community"
+  | "notifications"
   | "howto"
   | "friends";
 
@@ -72,6 +82,11 @@ function Shell() {
   const [pendingCorrId, setPendingCorrId] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [declinedToast, setDeclinedToast] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [pendingPuzzle, setPendingPuzzle] = useState<{
+    pos: string;
+    turn: Side;
+  } | null>(null);
   const actionsRef = useRef<ViewActions | null>(null);
   const [actionsVersion, setActionsVersion] = useState(0);
   const notifyActions = () => setActionsVersion((x) => x + 1);
@@ -85,14 +100,15 @@ function Shell() {
     setBannerOn(loadBanner());
   }, []);
 
-  // Deep links: ?room=CODE and ?corr=<uuid>, parsed on mount AND on
-  // window focus (push taps reuse the open tab).
+  // Deep links: ?room=CODE, ?corr=<uuid>, ?challenge=<uuid>, parsed on
+  // mount AND on window focus (push taps reuse the open tab).
   useEffect(() => {
     const parse = () => {
       try {
         const url = new URL(window.location.href);
         const room = url.searchParams.get("room");
         const corr = url.searchParams.get("corr");
+        const challenge = url.searchParams.get("challenge");
         let consumed = false;
         if (room && /^[A-Za-z0-9]{6}$/.test(room)) {
           setPendingRoomCode(room.toUpperCase());
@@ -107,6 +123,18 @@ function Shell() {
         ) {
           setPendingCorrId(corr);
           url.searchParams.delete("corr");
+          consumed = true;
+        }
+        if (
+          challenge &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            challenge
+          )
+        ) {
+          // The challenge popup (login-poll) shows the challenge itself;
+          // land on the Friends view so the incoming challenge is visible.
+          setMode("friends");
+          url.searchParams.delete("challenge");
           consumed = true;
         }
         if (consumed) {
@@ -159,6 +187,25 @@ function Shell() {
     setMode("corr");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, pendingCorrId]);
+
+  // Unread notification count for the avatar badge (best-effort).
+  const refreshUnread = useCallback(async () => {
+    if (!userId) {
+      setUnreadCount(0);
+      return;
+    }
+    try {
+      const { unread } = await fetchNotifications();
+      setUnreadCount(unread);
+    } catch {
+      /* badge is best-effort */
+    }
+  }, [userId]);
+  useEffect(() => {
+    refreshUnread();
+    const t = window.setInterval(refreshUnread, 60 * 1000);
+    return () => window.clearInterval(t);
+  }, [refreshUnread]);
 
   // Challenges: popup on login + live subscription.
   useEffect(() => {
@@ -275,6 +322,13 @@ function Shell() {
     setDrawerOpen(false);
   };
 
+  /** Setup editor → publish the arranged position as a community puzzle. */
+  const onPublishPuzzle = (pos: string, turn: Side) => {
+    setPendingPuzzle({ pos, turn });
+    setMode("community");
+    setDrawerOpen(false);
+  };
+
   const actions = actionsRef.current;
   void actionsVersion; // re-read actionsRef after views publish their actions
 
@@ -364,8 +418,24 @@ function Shell() {
                   onClick={() => setMenuOpen((v) => !v)}
                   aria-label={String(s.profile)}
                   title={displayName}
+                  style={{ position: "relative" }}
                 >
                   {(displayName || "?").slice(0, 1).toUpperCase()}
+                  {unreadCount > 0 && (
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        position: "absolute",
+                        top: -2,
+                        right: -2,
+                        width: 12,
+                        height: 12,
+                        borderRadius: "50%",
+                        background: "#fa5252",
+                        border: "2px solid var(--cct-bg, #14100c)",
+                      }}
+                    />
+                  )}
                 </button>
               )}
               {menuOpen && (
@@ -394,6 +464,36 @@ function Shell() {
                           }}
                         >
                           {String(s.friends)}
+                        </button>
+                        <button
+                          className="cct-btn"
+                          onClick={() => {
+                            setMode("notifications");
+                            setMenuOpen(false);
+                          }}
+                          style={{ position: "relative" }}
+                        >
+                          {String(s.notifications)}
+                          {unreadCount > 0 && (
+                            <span
+                              aria-hidden="true"
+                              style={{
+                                marginLeft: 6,
+                                minWidth: 18,
+                                height: 18,
+                                borderRadius: 9,
+                                background: "#fa5252",
+                                color: "#fff",
+                                fontSize: 12,
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: "0 5px",
+                              }}
+                            >
+                              {unreadCount}
+                            </span>
+                          )}
                         </button>
                       </>
                     )}
@@ -466,6 +566,18 @@ function Shell() {
                     {String(s.twoPlayer)}
                   </button>
                   <button
+                    data-active={mode === "puzzle"}
+                    onClick={() => switchMode("puzzle")}
+                  >
+                    {String(s.puzzle)}
+                  </button>
+                  <button
+                    data-active={mode === "bikip"}
+                    onClick={() => switchMode("bikip")}
+                  >
+                    {String(s.bikip)}
+                  </button>
+                  <button
                     data-active={mode === "setup"}
                     onClick={() => switchMode("setup")}
                   >
@@ -502,6 +614,12 @@ function Shell() {
                     {String(s.checkin)}
                   </button>
                   <button
+                    data-active={mode === "community"}
+                    onClick={() => switchMode("community")}
+                  >
+                    {String(s.community)}
+                  </button>
+                  <button
                     data-active={mode === "howto"}
                     onClick={() => switchMode("howto")}
                   >
@@ -528,10 +646,15 @@ function Shell() {
                   </label>
                 </section>
               )}
+              <section>
+                <PushSettings lang={lang} />
+              </section>
             </div>
           </nav>
         </div>
       )}
+
+      {user && <PushNudge lang={lang} />}
 
       {mode === "play" && (
         <PlayView
@@ -559,6 +682,7 @@ function Shell() {
           level={level}
           onLevelChange={setLevel}
           onPlayCustom={onPlayCustom}
+          onPublishPuzzle={onPublishPuzzle}
         />
       )}
       {mode === "history" && (
@@ -603,6 +727,23 @@ function Shell() {
           user={user ? { id: user.id } : null}
           onLogin={() => setAuthOpen(true)}
         />
+      )}
+      {mode === "puzzle" && <PuzzleView lang={lang} />}
+      {mode === "bikip" && <LibraryView lang={lang} />}
+      {mode === "community" && (
+        <CommunityView
+          lang={lang}
+          level={level}
+          onLevelChange={setLevel}
+          userId={user ? user.id : null}
+          onLogin={() => setAuthOpen(true)}
+          onPracticeVsAi={onPlayCustom}
+          pendingCreate={pendingPuzzle}
+          onConsumePendingCreate={() => setPendingPuzzle(null)}
+        />
+      )}
+      {mode === "notifications" && user && (
+        <NotificationsView lang={lang} onChanged={refreshUnread} />
       )}
       {mode === "howto" && <HowToView lang={lang} />}
 
