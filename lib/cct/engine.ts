@@ -167,6 +167,58 @@ export function countSoldiers(s: CctState, side: Side): number {
   return n;
 }
 
+/* ---------------- position serialization ---------------- */
+
+/**
+ * Position string: 25 chars, one per cell in index order, each '0'..'4'
+ * (the Cell value). Used for game records (start_pos), the setup editor,
+ * and (later) deep links. The side to move is NOT part of the string —
+ * it is carried separately wherever the string is stored/parsed.
+ */
+export function stateToPos(cells: Cell[]): string {
+  return cells.map((c) => String(c)).join("");
+}
+
+export function initialPos(): string {
+  return stateToPos(initialState().cells);
+}
+
+/**
+ * Validate a state as an editable position. Returns null when legal,
+ * otherwise an error key:
+ * - 'generals': not exactly 1 general per side;
+ * - 'soldiers': more than 9 soldiers on a side;
+ * - 'check': the side NOT to move is already under jump-threat
+ *   (the previous mover cannot have left them in check).
+ */
+export function validatePos(
+  st: CctState
+): "generals" | "soldiers" | "check" | null {
+  let rg = 0,
+    gg = 0,
+    rs = 0,
+    gs = 0;
+  for (const c of st.cells) {
+    if (c === R_GENERAL) rg++;
+    else if (c === G_GENERAL) gg++;
+    else if (c === R_SOLDIER) rs++;
+    else if (c === G_SOLDIER) gs++;
+  }
+  if (rg !== 1 || gg !== 1) return "generals";
+  if (rs > 9 || gs > 9) return "soldiers";
+  if (isGeneralThreatened(st, other(st.turn))) return "check";
+  return null;
+}
+
+/** Parse a position string + side to move into a state, or null when
+ *  the string is malformed or the position fails validatePos(). */
+export function posToState(pos: string, turn: Side): CctState | null {
+  if (!/^[0-4]{25}$/.test(pos)) return null;
+  const cells = pos.split("").map((ch) => Number(ch) as Cell);
+  const st: CctState = { cells, turn, plies: 0 };
+  return validatePos(st) === null ? st : null;
+}
+
 export function generalSquare(s: CctState, side: Side): number {
   const target = side === "r" ? R_GENERAL : G_GENERAL;
   const i = s.cells.indexOf(target);
