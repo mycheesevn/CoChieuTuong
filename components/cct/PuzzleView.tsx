@@ -215,20 +215,8 @@ export function PuzzleView({ lang }: { lang: Lang }) {
   };
 
   return (
-    <div className="cct-scroll-area">
-      <div className="cct-view">
-        <h2>{String(s.puzzle)}</h2>
-        <div className="cct-puzzle-streak">
-          <span>
-            🔥 {String(s.puzzleStreak)}: <strong>{streak.streak}</strong>{" "}
-            {String(s.puzzleDays)}
-          </span>
-          <span className="cct-hint">
-            {puzzle.title[lang]} ·{" "}
-            {puzzle.mateIn === 1 ? String(s.puzzleMateIn1) : String(s.puzzleMateIn2)}
-          </span>
-        </div>
-        <div className="cct-board-area">
+    <div className="cct-layout">
+      <div className="cct-board-area">
           <div className="cct-board-fit">
             <Board
               state={state}
@@ -243,7 +231,18 @@ export function PuzzleView({ lang }: { lang: Lang }) {
             />
           </div>
         </div>
-        <div className="cct-panel" style={{ marginTop: 8 }}>
+      <aside className="cct-panel">
+        <h2>{String(s.puzzle)}</h2>
+        <div className="cct-puzzle-streak">
+          <span>
+            🔥 {String(s.puzzleStreak)}: <strong>{streak.streak}</strong>{" "}
+            {String(s.puzzleDays)}
+          </span>
+          <span className="cct-hint">
+            {puzzle.title[lang]} ·{" "}
+            {puzzle.mateIn === 1 ? String(s.puzzleMateIn1) : String(s.puzzleMateIn2)}
+          </span>
+        </div>
           {!solved && (
             <>
               <p style={{ fontWeight: 600 }}>{String(s.puzzleSolvePrompt)}</p>
@@ -284,8 +283,7 @@ export function PuzzleView({ lang }: { lang: Lang }) {
               </button>
             </>
           )}
-        </div>
-      </div>
+      </aside>
     </div>
   );
 }

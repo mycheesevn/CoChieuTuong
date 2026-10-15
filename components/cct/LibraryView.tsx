@@ -276,9 +276,8 @@ function LessonPlayer({
   };
 
   return (
-    <div className="cct-scroll-area">
-      <div className="cct-view">
-        <div className="cct-board-area">
+    <div className="cct-layout">
+      <div className="cct-board-area">
           <div className="cct-board-fit">
             <Board
               state={state}
@@ -293,7 +292,13 @@ function LessonPlayer({
             />
           </div>
         </div>
-        <div className="cct-panel" style={{ marginTop: 8 }}>
+      <aside className="cct-panel">
+          <h3>{lesson.title[lang]}</h3>
+          <p className="cct-hint">{lesson.intro[lang]}</p>
+          <p className="cct-lib-progress">
+            {lang === "vi" ? "Bước" : "Step"} {Math.min(stepIdx + 1, lesson.steps.length)}/
+            {lesson.steps.length}
+          </p>
           {!finished && step && step.kind === "show" && (
             <>
               <p>{step.text[lang]}</p>
@@ -335,16 +340,7 @@ function LessonPlayer({
               </button>
             </>
           )}
-        </div>
-        <div style={{ marginTop: 8 }}>
-          <h3>{lesson.title[lang]}</h3>
-          <p className="cct-hint">{lesson.intro[lang]}</p>
-          <p className="cct-lib-progress">
-            {lang === "vi" ? "Bước" : "Step"} {Math.min(stepIdx + 1, lesson.steps.length)}/
-            {lesson.steps.length}
-          </p>
-        </div>
-      </div>
+      </aside>
     </div>
   );
 }

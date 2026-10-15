@@ -7,7 +7,7 @@ import { HistoryView } from "./HistoryView";
 import { LeaderboardView } from "./LeaderboardView";
 import { CheckinView } from "./CheckinView";
 import { SetupView } from "./SetupView";
-import RoomView from "./RoomView";
+import RoomView, { roomErrText } from "./RoomView";
 import CorrView from "./CorrView";
 import FriendsView from "./FriendsView";
 import { LibraryView } from "./LibraryView";
@@ -28,7 +28,7 @@ import {
   subscribeChallenges,
   type Challenge,
 } from "@/lib/supabase/friends";
-import { joinRoom } from "@/lib/supabase/rooms";
+import { joinRoom, roomErrorKey } from "@/lib/supabase/rooms";
 import { fetchNotifications } from "@/lib/supabase/notifications";
 import { createClient } from "@/lib/supabase/client";
 
@@ -280,12 +280,20 @@ function Shell() {
   const acceptChallenge = async (c: Challenge) => {
     setChallenge(null);
     try {
-      await respondChallenge(c.id, true);
+      // Join FIRST: if the room is full/closed/gone the challenge must
+      // stay pending (retryable) instead of being silently consumed.
       const room = await joinRoom(c.room_code);
+      await respondChallenge(c.id, true).catch(() => {
+        /* membership already secured; the status flag is cosmetic */
+      });
       setOpenRoomId(room.id);
       setMode("room");
-    } catch {
-      /* best-effort */
+    } catch (e) {
+      // Never fail silently: explain and keep the challenge actionable.
+      setDeclinedToast(roomErrText(roomErrorKey(e), s));
+      setTimeout(() => setDeclinedToast(null), 5000);
+      setChallenge(c);
+      return;
     }
     // Surface the next pending challenge, if any.
     try {
@@ -307,15 +315,16 @@ function Shell() {
     }
   };
 
-  /** FriendsView accept → join the challenge room and open it. */
-  const onAcceptChallengeFromFriends = async (c: Challenge) => {
-    try {
-      const room = await joinRoom(c.room_code);
-      setOpenRoomId(room.id);
-      setMode("room");
-    } catch {
-      /* best-effort */
-    }
+  /** FriendsView accept → join FIRST, then mark accepted, then open
+   *  the room. Throws on join failure so FriendsView can show the
+   *  reason and keep the challenge row (it stays pending). */
+  const onAcceptChallengeFromFriends = async (c: Challenge): Promise<void> => {
+    const room = await joinRoom(c.room_code);
+    await respondChallenge(c.id, true).catch(() => {
+      /* membership already secured; the status flag is cosmetic */
+    });
+    setOpenRoomId(room.id);
+    setMode("room");
   };
 
   const s = STR[lang] as Record<string, string | string[]>;

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { roomErrorKey } from "@/lib/supabase/rooms";
+import { roomErrText } from "./RoomView";
 import { STR, type Lang } from "@/lib/cct/i18n";
 import { levelForXp } from "@/lib/cct/levels";
 import {
@@ -62,7 +64,7 @@ interface Props {
   lang: Lang;
   userId: string;
   myName: string;
-  onAcceptChallenge: (c: Challenge) => void;
+  onAcceptChallenge: (c: Challenge) => Promise<void>;
 }
 
 export default function FriendsView({
@@ -150,11 +152,13 @@ export default function FriendsView({
   const onAccept = async (c: Challenge) => {
     setActionError("");
     try {
-      await respondChallenge(c.id, true);
+      // AppShell joins the room, marks the challenge accepted and
+      // navigates — in that order, throwing with the room reason when
+      // the join fails so the challenge stays pending and retryable.
+      await onAcceptChallenge(c);
       setIncoming((prev) => prev.filter((x) => x.id !== c.id));
-      onAcceptChallenge(c);
-    } catch {
-      setActionError(String(s.friendsActionError));
+    } catch (e) {
+      setActionError(roomErrText(roomErrorKey(e), s));
     }
   };
 

@@ -43,8 +43,11 @@ const GRID = STEP * 4;
 const P0 = (VW - GRID) / 2; // 96 — board centered horizontally
 const BY = 190;
 
-const SOLDIER_R = STEP * 0.36;
-const GENERAL_R = STEP * 0.52;
+// Piece radii as fractions of STEP — MUST match Board.tsx gameplay
+// geometry (soldier r=44, general r=68 on STEP=226) so exported videos
+// show pieces at the same relative size as the live board.
+const SOLDIER_R = STEP * (44 / 226);
+const GENERAL_R = STEP * (68 / 226);
 
 const TITLE_DUR = 2.0;
 const END_DUR = 2.5;
@@ -133,34 +136,35 @@ export async function exportCctReplayVideo(
     const r = (isGen ? GENERAL_R : SOLDIER_R) * scale;
     const red = cell <= 2;
     ctx.save();
-    ctx.fillStyle = "rgba(0,0,0,0.25)";
+    // Shadow: same construction as Board.tsx (full disc, +0.09r, 22%).
+    ctx.fillStyle = "rgba(0,0,0,0.22)";
     ctx.beginPath();
-    ctx.ellipse(x, y + r * 0.16, r * 0.95, r * 0.32, 0, 0, Math.PI * 2);
+    ctx.arc(x, y + r * 0.09, r, 0, Math.PI * 2);
     ctx.fill();
     const g = ctx.createRadialGradient(
       x - r * 0.3, y - r * 0.35, r * 0.2, x, y, r
     );
     if (red) {
-      g.addColorStop(0, "#f0564a");
-      g.addColorStop(1, "#a02018");
+      g.addColorStop(0, "#B3242F");
+      g.addColorStop(1, "#7E1019");
     } else {
-      g.addColorStop(0, "#5fbf6a");
-      g.addColorStop(1, "#1f7a2c");
+      g.addColorStop(0, "#1C6B4C");
+      g.addColorStop(1, "#0C4230");
     }
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = red ? "#7a140d" : "#0f4d1a";
-    ctx.lineWidth = (isGen ? 7 : 5) * scale;
+    ctx.lineWidth = r * 0.1;
     ctx.stroke();
-    if (isGen) {
-      ctx.strokeStyle = "rgba(255,255,255,0.55)";
-      ctx.lineWidth = 3 * scale;
-      ctx.beginPath();
-      ctx.arc(x, y, r * 0.68, 0, Math.PI * 2);
-      ctx.stroke();
-    }
+    // Inner ring for both piece types, Board.tsx radii (34/44 soldier,
+    // 55/68 general) and opacities (red .30 / green .35).
+    ctx.strokeStyle = `rgba(255,255,255,${red ? 0.3 : 0.35})`;
+    ctx.lineWidth = r * (isGen ? 3.5 / 68 : 3 / 44);
+    ctx.beginPath();
+    ctx.arc(x, y, r * (isGen ? 55 / 68 : 34 / 44), 0, Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   };
 
@@ -326,7 +330,7 @@ export async function exportCctReplayVideo(
       ctx.strokeStyle = "#ff5252";
       ctx.lineWidth = 6;
       ctx.beginPath();
-      ctx.arc(cx(checkSq), cy(checkSq), GENERAL_R * 0.82, 0, Math.PI * 2);
+      ctx.arc(cx(checkSq), cy(checkSq), GENERAL_R * (82 / 68), 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
     }
@@ -349,10 +353,11 @@ export async function exportCctReplayVideo(
       ctx.moveTo(x0, y0);
       ctx.lineTo(x1, y1);
       ctx.stroke();
+      const rMove = cell === 2 || cell === 4 ? GENERAL_R : SOLDIER_R;
       ctx.globalAlpha = 0.9 * (1 - p);
       ctx.lineWidth = 6;
       ctx.beginPath();
-      ctx.arc(x0, y0, 24 + 18 * p, 0, Math.PI * 2);
+      ctx.arc(x0, y0, rMove * (0.5 + 0.38 * p), 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
       const x = x0 + (x1 - x0) * p;
@@ -361,7 +366,7 @@ export async function exportCctReplayVideo(
       ctx.globalAlpha = 0.5 * fade;
       ctx.fillStyle = "#40e0d0";
       ctx.beginPath();
-      ctx.arc(x, y, 46, 0, Math.PI * 2);
+      ctx.arc(x, y, rMove, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
       drawPieces(

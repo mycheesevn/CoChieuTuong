@@ -49,7 +49,7 @@ interface RoomViewProps {
 
 const MAX_PLAYERS_OPTIONS = [2, 3, 4, 5, 6, 8, 10, 12, 16, 20];
 
-function roomErrText(key: string, s: Record<string, string | string[]>): string {
+export function roomErrText(key: string, s: Record<string, string | string[]>): string {
   const map: Record<string, string> = {
     room_not_found: "roomErrNotFound",
     room_full: "roomErrFull",
