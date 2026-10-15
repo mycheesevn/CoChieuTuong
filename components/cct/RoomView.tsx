@@ -389,6 +389,9 @@ function RoomDetail({
   const [closeArmed, setCloseArmed] = useState(false);
   const [kicked, setKicked] = useState(false);
   const initialized = useRef(false);
+  // A match the user deliberately exited (← back to lobby): polling
+  // must not yank them straight back in. A NEW match still follows.
+  const dismissedMatchId = useRef<string | null>(null);
   const { page, pageCount, pageItems, setPage } = usePagination(pastMatches, 10);
 
   const load = useCallback(async () => {
@@ -402,6 +405,11 @@ function RoomDetail({
       setRoom(r);
       setMembers(ms);
       setActiveMatch(active);
+      if (active && dismissedMatchId.current !== active.id) {
+        // Follow only from the lobby (prev === null): never yank a
+        // user who is watching a finished match or another view.
+        setViewedMatch((prev) => (prev ? prev : active));
+      }
       setPastMatches(past);
       if (r) setRulesDraft(r.rules ?? "");
       const ids = new Set<string>();
@@ -557,7 +565,10 @@ function RoomDetail({
         userId={userId}
         guest={false}
         names={matchNames(viewedMatch)}
-        onExit={() => setViewedMatch(null)}
+        onExit={() => {
+          dismissedMatchId.current = viewedMatch.id;
+          setViewedMatch(null);
+        }}
         onMatchChange={handleMatchChange}
       />
     );
@@ -767,7 +778,12 @@ function RoomDetail({
                       className="cct-btn cct-btn-primary"
                       disabled={!!activeMatch || room.status === "closed"}
                       onClick={() =>
-                        act(() => startNextMatch(roomId), "start")
+                        act(async () => {
+                          const m = await startNextMatch(roomId);
+                          dismissedMatchId.current = null;
+                          setActiveMatch(m);
+                          setViewedMatch(m);
+                        }, "start")
                       }
                     >
                       {String(s.roomStartMatch)}
