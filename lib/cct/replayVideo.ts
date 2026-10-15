@@ -50,7 +50,8 @@ const SOLDIER_R = STEP * (44 / 226);
 const GENERAL_R = STEP * (68 / 226);
 
 const TITLE_DUR = 2.0;
-const END_DUR = 2.5;
+const FINISH_DUR = 2.2;
+const END_DUR = 2.0;
 
 function easeInOut(t: number): number {
   return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
@@ -129,7 +130,9 @@ export async function exportCctReplayVideo(
   const GLIDE = 0.6 / speed;
   const HOLD = 1.0 / speed;
   const PER = GLIDE + HOLD;
-  const total = TITLE_DUR + n * PER + END_DUR;
+  const decisive = finalMate || finalStalemate;
+  const finishDur = decisive ? FINISH_DUR : 0;
+  const total = TITLE_DUR + n * PER + finishDur + END_DUR;
 
   // Confetti over the finish (checkmate or stalemate): deterministic
   // particle bursts timed to the final move landing + the end card.
@@ -169,7 +172,7 @@ export async function exportCctReplayVideo(
     mkBurst(mateT, VW / 2);
     mkBurst(mateT + 0.55, VW * 0.3);
     mkBurst(mateT + 0.55, VW * 0.7);
-    mkBurst(endT + 0.15, VW / 2);
+    mkBurst(endT + 0.1, VW / 2);
   }
   const drawConfetti = (t: number) => {
     for (const b of confettiBursts) {
@@ -348,9 +351,16 @@ export async function exportCctReplayVideo(
             checkSq = threatenedGeneral(board);
           }
         }
-        card = true;
-        showMate = finalMate;
-        showStalemate = finalStalemate;
+        if (decisive && mt < n * PER + FINISH_DUR) {
+          // Finish celebration (family video standard): final board +
+          // result banner + confetti — NO card overlay yet.
+          showMate = finalMate;
+          showStalemate = finalStalemate;
+        } else {
+          // Outro card: title/subtitle + the site CTA, a clean END_DUR
+          // (2s) after the celebration.
+          card = true;
+        }
       } else {
         const lt = mt - idx * PER;
         const ply = plies[idx];
