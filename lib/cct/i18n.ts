@@ -411,6 +411,7 @@ const vi = {
   replayError: "Không ghi được video trên thiết bị này.",
   replayClose: "Đóng",
   replayStalemate: "BÍ NƯỚC!",
+  replaySiteCta: "👉 Chơi miễn phí tại cochieutuong-my-cheese-vn.vercel.app",
 };
 
 export type StrKey = keyof typeof vi;
@@ -823,6 +824,7 @@ const en: Record<StrKey, string | string[]> = {
   replayError: "Couldn't record video on this device.",
   replayClose: "Close",
   replayStalemate: "STALEMATE!",
+  replaySiteCta: "👉 Play free at cochieutuong-my-cheese-vn.vercel.app",
 };
 
 export const STR: Record<Lang, Record<StrKey, string | string[]>> = { vi, en };

@@ -9,6 +9,7 @@ import {
   type ReplayPly,
 } from "@/lib/cct/replay";
 import { isGeneralThreatened } from "@/lib/cct/engine";
+import { burstConfetti } from "@/lib/cct/confetti";
 
 interface Props {
   lang: Lang;
@@ -43,6 +44,20 @@ export function ReplayView({ lang, game, onBack, onExportVideo }: Props) {
       if (timer.current) window.clearTimeout(timer.current);
     };
   }, [autoplay, ply, total]);
+
+  // Confetti when the replay arrives at a checkmate finish — once per
+  // arrival; stepping back re-arms it (live games celebrate, replays
+  // should too).
+  const celebratedRef = useRef(false);
+  useEffect(() => {
+    const atMate = total > 0 && ply >= total && !!plies[total - 1]?.mate;
+    if (atMate && !celebratedRef.current) {
+      celebratedRef.current = true;
+      const t = window.setTimeout(() => burstConfetti(), 350);
+      return () => window.clearTimeout(t);
+    }
+    if (!atMate) celebratedRef.current = false;
+  }, [ply, total, plies]);
 
   const state = states[Math.min(ply, states.length - 1)];
   const lastPly: ReplayPly | null = ply > 0 ? plies[ply - 1] : null;

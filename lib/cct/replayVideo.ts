@@ -131,6 +131,72 @@ export async function exportCctReplayVideo(
   const PER = GLIDE + HOLD;
   const total = TITLE_DUR + n * PER + END_DUR;
 
+  // Confetti over the finish (checkmate or stalemate): deterministic
+  // particle bursts timed to the final move landing + the end card.
+  const CONFETTI_COLORS = ["#e2483d", "#3da35d", "#f5c542", "#ffffff", "#ffd97a"];
+  interface ConfettiP {
+    bx: number; by: number; vx: number; vy: number;
+    w: number; h: number; rot: number; vr: number;
+    color: string; delay: number;
+  }
+  const confettiBursts: Array<{ t0: number; parts: ConfettiP[] }> = [];
+  if ((finalMate || finalStalemate) && n > 0) {
+    let seed = 987654321;
+    const rnd = () => {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      return seed / 4294967296;
+    };
+    const mateT = TITLE_DUR + (n - 1) * PER + GLIDE;
+    const endT = TITLE_DUR + n * PER;
+    const mkBurst = (t0: number, cxp: number) => {
+      const parts: ConfettiP[] = [];
+      for (let i = 0; i < 70; i++) {
+        parts.push({
+          bx: cxp + (rnd() - 0.5) * 60,
+          by: 300 + rnd() * 80,
+          vx: (rnd() - 0.5) * 260,
+          vy: -(240 + rnd() * 320),
+          w: 7 + rnd() * 7,
+          h: 4 + rnd() * 5,
+          rot: rnd() * Math.PI,
+          vr: (rnd() - 0.5) * 9,
+          color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+          delay: rnd() * 0.25,
+        });
+      }
+      confettiBursts.push({ t0, parts });
+    };
+    mkBurst(mateT, VW / 2);
+    mkBurst(mateT + 0.55, VW * 0.3);
+    mkBurst(mateT + 0.55, VW * 0.7);
+    mkBurst(endT + 0.15, VW / 2);
+  }
+  const drawConfetti = (t: number) => {
+    for (const b of confettiBursts) {
+      const age = t - b.t0;
+      if (age < 0) continue;
+      for (const p of b.parts) {
+        const a = age - p.delay;
+        if (a < 0 || a > 2.6) continue;
+        const x = p.bx + p.vx * a;
+        const y = p.by + p.vy * a + 340 * a * a;
+        if (y > VH + 30) continue;
+        ctx.save();
+        ctx.globalAlpha = a > 2.0 ? Math.max(0, (2.6 - a) / 0.6) : 1;
+        ctx.translate(x, y);
+        ctx.rotate(p.rot + p.vr * a);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(
+          -p.w / 2,
+          -p.h / 2,
+          p.w,
+          p.h * (0.4 + 0.6 * Math.abs(Math.sin(a * 6 + p.rot)))
+        );
+        ctx.restore();
+      }
+    }
+  };
+
   const drawDisc = (x: number, y: number, cell: Cell, scale: number) => {
     const isGen = cell === 2 || cell === 4;
     const r = (isGen ? GENERAL_R : SOLDIER_R) * scale;
@@ -436,7 +502,13 @@ export async function exportCctReplayVideo(
       ctx.fillStyle = "#cfd8e3";
       ctx.font = "400 33px system-ui, sans-serif";
       ctx.fillText(input.subtitle, VW / 2, VH / 2 + 38, VW - 80);
+      // Site CTA on the intro + outro cards.
+      ctx.fillStyle = "#e8c96a";
+      ctx.font = "600 26px system-ui, sans-serif";
+      ctx.fillText(s.replaySiteCta, VW / 2, VH / 2 + 104, VW - 60);
     }
+
+    drawConfetti(t);
   };
 
   const stream = canvas.captureStream(30);
