@@ -29,6 +29,7 @@ import {
   type Challenge,
 } from "@/lib/supabase/friends";
 import { joinRoom, roomErrorKey } from "@/lib/supabase/rooms";
+import { fireEvent } from "@/lib/supabase/notify";
 import { fetchNotifications } from "@/lib/supabase/notifications";
 import { createClient } from "@/lib/supabase/client";
 
@@ -264,6 +265,21 @@ function Shell() {
         setTimeout(() => {
           if (!dead) setDeclinedToast(null);
         }, 4000);
+      },
+      (c, challengedName) => {
+        // My challenge was accepted: the accepter is already entering
+        // the room — bring me in too, no manual room hunt (user request).
+        if (dead) return;
+        setDeclinedToast(
+          String(s.challengeAcceptedToast).replace("{name}", challengedName)
+        );
+        setTimeout(() => {
+          if (!dead) setDeclinedToast(null);
+        }, 4000);
+        if (c.room_id) {
+          setOpenRoomId(c.room_id);
+          setMode("room");
+        }
       }
     );
     return () => {
@@ -286,6 +302,10 @@ function Shell() {
       await respondChallenge(c.id, true).catch(() => {
         /* membership already secured; the status flag is cosmetic */
       });
+      // Notify the challenger (push + inbox) — fired from the accepter's
+      // client because the trigger route verifies the caller IS the
+      // challenged player; the challenger may not even be online.
+      void fireEvent("challenge_accepted", { challenge: c.id });
       setOpenRoomId(room.id);
       setMode("room");
     } catch (e) {
@@ -308,6 +328,7 @@ function Shell() {
     setChallenge(null);
     try {
       await respondChallenge(c.id, false);
+      void fireEvent("challenge_declined", { challenge: c.id });
       const { incoming } = await fetchPendingChallenges();
       if (incoming.length > 0) setChallenge(incoming[0]);
     } catch {
