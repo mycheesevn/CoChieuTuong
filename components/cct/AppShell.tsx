@@ -115,7 +115,20 @@ function Shell() {
   const [actionsVersion, setActionsVersion] = useState(0);
   const notifyActions = () => setActionsVersion((x) => x + 1);
 
-  const { user, displayName, signOut, cctStats } = useAuth();
+  const { user, displayName, signOut, cctStats, sessionExpired, dismissSessionExpired } = useAuth();
+  const [expiredMsg, setExpiredMsg] = useState<string | null>(null);
+
+  /* Session ended on its own (expired / refresh failed): say so. */
+  useEffect(() => {
+    if (!sessionExpired) return;
+    setExpiredMsg(String(s.sessionExpired));
+    const t = setTimeout(() => {
+      setExpiredMsg(null);
+      dismissSessionExpired();
+    }, 7000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionExpired]);
   const userId = user?.id ?? null;
 
   useEffect(() => {
@@ -1103,6 +1116,11 @@ function Shell() {
       {hubChallengeMsg && !hubChallengeTarget && (
         <div className="cct-toast" role="status">
           {hubChallengeMsg}
+        </div>
+      )}
+      {expiredMsg && (
+        <div className="cct-toast" role="status">
+          {expiredMsg}
         </div>
       )}
       <ProfileModal

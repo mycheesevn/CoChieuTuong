@@ -214,6 +214,7 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
   const [resignArmed, setResignArmed] = useState(false);
   const [flash, setFlash] = useState<{ sq: number; key: number } | null>(null);
   const [xpToast, setXpToast] = useState<number | null>(null);
+  const [recordMsg, setRecordMsg] = useState<string | null>(null);
   const flashKey = useRef(0);
   const gameStartedRef = useRef(false);
   const recordedRef = useRef(false);
@@ -230,6 +231,7 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
     setResignArmed(false);
     setFlash(null);
     setXpToast(null);
+    setRecordMsg(null);
     gameStartedRef.current = false;
     recordedRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -314,6 +316,7 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
     setResignArmed(false);
     setFlash(null);
     setXpToast(null);
+    setRecordMsg(null);
     gameStartedRef.current = false;
     recordedRef.current = false;
   };
@@ -403,7 +406,9 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
               setXpToast(xp);
               await refreshStats();
             } catch {
-              /* recording must never break the game-over screen */
+              /* Recording must never break the game-over screen — but a
+                 failed record says so out loud (the game was not counted). */
+              setRecordMsg(String(s.recordFailed));
             }
           })();
         }
@@ -489,6 +494,9 @@ export default function PlayView({ lang, level, bannerOn, actionsRef, notifyActi
             <div className="cct-reason">{reasonText(s, final)}</div>
             {xpToast !== null && (
               <div className="cct-xp-toast">＋{xpToast} XP</div>
+            )}
+            {recordMsg && (
+              <div className="cct-xp-toast" role="status">{recordMsg}</div>
             )}
             {!user && (
               <div className="cct-guest-hint">
