@@ -25,6 +25,7 @@ import type { Side } from "@/lib/cct/engine";
 import {
   fetchPendingChallenges,
   respondChallenge,
+  sendChallenge,
   subscribeChallenges,
   type Challenge,
 } from "@/lib/supabase/friends";
@@ -89,6 +90,17 @@ function Shell() {
   const [pendingRoomCode, setPendingRoomCode] = useState<string | null>(null);
   const [corrDeepLinkId, setCorrDeepLinkId] = useState<string | null>(null);
   const [pendingCorrId, setPendingCorrId] = useState<string | null>(null);
+  /** Hub deep link: ?challenge=<handle> — an OUTGOING challenge to that
+   *  player (the UUID form is an INCOMING challenge id, handled above). */
+  const [hubChallengeHandle, setHubChallengeHandle] = useState<string | null>(
+    null
+  );
+  const [hubChallengeTarget, setHubChallengeTarget] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  const [hubChallengeBusy, setHubChallengeBusy] = useState(false);
+  const [hubChallengeMsg, setHubChallengeMsg] = useState("");
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [declinedToast, setDeclinedToast] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -163,6 +175,18 @@ function Shell() {
           // The challenge popup (login-poll) shows the challenge itself;
           // land on the Friends view so the incoming challenge is visible.
           setMode("friends");
+          url.searchParams.delete("challenge");
+          consumed = true;
+        }
+        if (
+          challenge &&
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+            challenge
+          )
+        ) {
+          // From the SynerWorlds hub (profile page / Tìm đối thủ board):
+          // ?challenge=<handle> is an OUTGOING challenge to that player.
+          setHubChallengeHandle(challenge.toLowerCase());
           url.searchParams.delete("challenge");
           consumed = true;
         }
@@ -349,6 +373,74 @@ function Shell() {
   };
 
   const s = STR[lang] as Record<string, string | string[]>;
+
+  // Hub challenge deep link: prompt login if needed, resolve the handle to
+  // a player, then ask for confirmation before sending.
+  useEffect(() => {
+    if (!hubChallengeHandle) return;
+    if (!user) {
+      setAuthOpen(true);
+      return;
+    }
+    let dead = false;
+    (async () => {
+      try {
+        const sb = createClient();
+        const { data } = await sb
+          .from("profiles")
+          .select("id, full_name, username")
+          .eq("handle", hubChallengeHandle)
+          .maybeSingle();
+        if (dead) return;
+        setHubChallengeHandle(null);
+        if (!data) {
+          setHubChallengeMsg(String(s.hubChallengeNotFound));
+          setTimeout(() => setHubChallengeMsg(""), 4500);
+          return;
+        }
+        const row = data as {
+          id: string;
+          full_name: string | null;
+          username: string | null;
+        };
+        if (row.id === user.id) return; // own profile link — nothing to challenge
+        const name =
+          row.full_name?.trim() || row.username?.trim() || "Player";
+        setHubChallengeTarget({ id: row.id, name });
+      } catch {
+        if (!dead) {
+          setHubChallengeHandle(null);
+          setHubChallengeMsg(String(s.hubChallengeNotFound));
+          setTimeout(() => setHubChallengeMsg(""), 4500);
+        }
+      }
+    })();
+    return () => {
+      dead = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, hubChallengeHandle]);
+
+  const doHubChallenge = async () => {
+    if (!hubChallengeTarget || hubChallengeBusy) return;
+    setHubChallengeBusy(true);
+    setHubChallengeMsg("");
+    try {
+      const ch = await sendChallenge(hubChallengeTarget.id, displayName);
+      setHubChallengeTarget(null);
+      // Enter the created room immediately: the challenger is already a
+      // member via createRoom — mirrors the accepted-challenge auto-route.
+      if (ch.room_id) {
+        setOpenRoomId(ch.room_id);
+        setMode("room");
+      }
+    } catch {
+      // Keep the modal open and explain — never swallow a failed send.
+      setHubChallengeMsg(String(s.hubChallengeError));
+    } finally {
+      setHubChallengeBusy(false);
+    }
+  };
 
   const changeLang = (l: Lang) => {
     setLang(l);
@@ -923,6 +1015,64 @@ function Shell() {
         initialMode={authMode}
         onClose={() => setAuthOpen(false)}
       />
+      {hubChallengeTarget && (
+        <div
+          className="cct-modal-root"
+          onClick={() => {
+            if (!hubChallengeBusy) {
+              setHubChallengeTarget(null);
+              setHubChallengeMsg("");
+            }
+          }}
+        >
+          <div className="cct-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>
+              {String(s.hubChallengeTitle).replace(
+                "{name}",
+                hubChallengeTarget.name
+              )}
+            </h2>
+            {hubChallengeMsg && (
+              <p
+                style={{
+                  color: "var(--danger)",
+                  margin: "0 0 8px",
+                  textAlign: "center",
+                }}
+                role="alert"
+              >
+                {hubChallengeMsg}
+              </p>
+            )}
+            <div className="cct-modal-actions">
+              <button
+                type="button"
+                className="cct-btn cct-btn-primary"
+                disabled={hubChallengeBusy}
+                onClick={doHubChallenge}
+              >
+                {String(s.hubChallengeSend)}
+              </button>
+              <button
+                type="button"
+                className="cct-btn"
+                disabled={hubChallengeBusy}
+                onClick={() => {
+                  setHubChallengeTarget(null);
+                  setHubChallengeMsg("");
+                }}
+              >
+                {String(s.hubChallengeLater)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {hubChallengeMsg && !hubChallengeTarget && (
+        <div className="cct-toast" role="status">
+          {hubChallengeMsg}
+        </div>
+      )}
       <ProfileModal
         lang={lang}
         open={profileOpen}
