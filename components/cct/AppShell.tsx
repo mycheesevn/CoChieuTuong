@@ -101,6 +101,9 @@ function Shell() {
   } | null>(null);
   const [hubChallengeBusy, setHubChallengeBusy] = useState(false);
   const [hubChallengeMsg, setHubChallengeMsg] = useState("");
+  /** Hub one-tap login: ?sso=<magic-link token_hash> minted by the
+   *  SynerWorlds hub. Single-use; stripped from the URL on arrival. */
+  const [ssoToken, setSsoToken] = useState<string | null>(null);
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [declinedToast, setDeclinedToast] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -188,6 +191,14 @@ function Shell() {
           // ?challenge=<handle> is an OUTGOING challenge to that player.
           setHubChallengeHandle(challenge.toLowerCase());
           url.searchParams.delete("challenge");
+          consumed = true;
+        }
+        // From the SynerWorlds hub: ?sso=<magic-link token_hash> redeems a
+        // one-tap login (may arrive together with ?room= / ?challenge=).
+        const sso = url.searchParams.get("sso");
+        if (sso) {
+          setSsoToken(sso);
+          url.searchParams.delete("sso");
           consumed = true;
         }
         if (consumed) {
@@ -420,6 +431,27 @@ function Shell() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, hubChallengeHandle]);
+
+  // Hub one-tap login: redeem the one-time token; the auth listener picks
+  // the session up from there. Failures are said out loud (toast), never
+  // swallowed — the player can still sign in manually.
+  useEffect(() => {
+    if (!ssoToken) return;
+    let dead = false;
+    (async () => {
+      const { error } = await createClient().auth.verifyOtp({
+        token_hash: ssoToken,
+        type: "magiclink",
+      });
+      if (dead) return;
+      setSsoToken(null);
+      if (error) setHubChallengeMsg(String(s.ssoError));
+    })();
+    return () => {
+      dead = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ssoToken]);
 
   const doHubChallenge = async () => {
     if (!hubChallengeTarget || hubChallengeBusy) return;
